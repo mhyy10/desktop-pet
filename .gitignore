@@ -26,3 +26,6 @@ screenshot*.png
 
 # Rust/Tauri build artifacts
 src-tauri/target/
+desktop-pet-linux
+desktop-pet_*.deb
+*.rpm

@@ -15,6 +15,17 @@ import { ChatBubble } from './ui/ChatBubble'
 import { QuickMenu } from './ui/QuickMenu'
 import './App.css'
 
+// Tauri API — 仅在 Tauri 环境中可用
+let tauriWindow: typeof import('@tauri-apps/api/window') | null = null
+try {
+  // 动态检测是否在 Tauri 环境中
+  if (window.__TAURI_INTERNALS__) {
+    tauriWindow = await import('@tauri-apps/api/window')
+  }
+} catch {
+  // 浏览器环境，忽略
+}
+
 // ============================================
 // 主应用 — 桌面宠物（像素风）
 // ============================================
@@ -23,6 +34,9 @@ const CANVAS_W = 300
 const CANVAS_H = 350
 const PET_CENTER_X = CANVAS_W / 2
 const PET_CENTER_Y = CANVAS_H / 2 + 20
+
+/** 是否运行在 Tauri 桌面环境中 */
+const isTauri = !!window.__TAURI_INTERNALS__
 
 export default function App() {
   // ---- 核心系统（只用 useRef 存，避免重渲染） ----
@@ -45,8 +59,10 @@ export default function App() {
   const [isDragging, setIsDragging] = useState(false)
   const [isReady, setIsReady] = useState(false)
 
-  // 宠物位置（用于拖拽）
-  const dragStartRef = useRef<{ x: number; y: number; petX: number; petY: number } | null>(null)
+  // 拖拽状态
+  const isDragTrackingRef = useRef(false)
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null)
+  const hasMovedRef = useRef(false)
 
   // ---- 宠物状态（非响应式，每帧读取） ----
   const petStateRef = useRef<PetState>({
@@ -158,7 +174,7 @@ export default function App() {
 
   // ---- 交互：点击宠物 ----
   const handlePetClick = useCallback(() => {
-    if (isDragging) return
+    if (hasMovedRef.current) return // 拖拽过就不触发点击
 
     petStateRef.current.lastInteractionTime = Date.now()
 
@@ -168,7 +184,7 @@ export default function App() {
 
     // 打开对话
     setIsChatOpen(true)
-  }, [isDragging])
+  }, [])
 
   // ---- 交互：右键菜单 ----
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
@@ -176,44 +192,55 @@ export default function App() {
     setQuickMenu({ x: e.clientX, y: e.clientY })
   }, [])
 
-  // ---- 交互：拖拽 ----
+  // ---- 交互：拖拽（Tauri 桌面环境 → 拖动窗口 / 浏览器 → Canvas 内拖动） ----
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button !== 0) return // 只响应左键
-    dragStartRef.current = {
-      x: e.clientX,
-      y: e.clientY,
-      petX: physicsRef.current.x.value,
-      petY: physicsRef.current.y.value,
+
+    isDragTrackingRef.current = true
+    hasMovedRef.current = false
+    dragStartRef.current = { x: e.clientX, y: e.clientY }
+
+    // Tauri 环境：立即调用 startDragging 让操作系统接管拖拽
+    if (isTauri && tauriWindow) {
+      tauriWindow.getCurrentWindow().startDragging().catch(() => {
+        // startDragging 失败则回退到手动拖拽
+      })
+      setIsDragging(true)
+      petStateRef.current.isDragging = true
     }
   }, [])
 
+  // 浏览器环境的 fallback 拖拽（Tauri 用 startDragging 不需要这些）
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!dragStartRef.current) return
+    if (!isDragTrackingRef.current || isTauri) return
 
-    const dx = e.clientX - dragStartRef.current.x
-    const dy = e.clientY - dragStartRef.current.y
+    const dx = e.clientX - (dragStartRef.current?.x ?? 0)
+    const dy = e.clientY - (dragStartRef.current?.y ?? 0)
 
-    // 移动超过5px才算拖拽
     if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
       if (!isDragging) {
         setIsDragging(true)
         petStateRef.current.isDragging = true
       }
+      hasMovedRef.current = true
 
-      const newX = dragStartRef.current.petX + dx
-      const newY = dragStartRef.current.petY + dy
+      const newX = PET_CENTER_X + dx
+      const newY = PET_CENTER_Y + dy
       physicsRef.current.stretch(newX, newY)
     }
   }, [isDragging])
 
   const handleMouseUp = useCallback(() => {
     if (isDragging) {
-      // 弹回中心
-      physicsRef.current.setTarget(PET_CENTER_X, PET_CENTER_Y)
+      if (!isTauri) {
+        // 浏览器环境：弹回中心
+        physicsRef.current.setTarget(PET_CENTER_X, PET_CENTER_Y)
+      }
+      particleSystemRef.current.emit('star', PET_CENTER_X, PET_CENTER_Y, 4)
       setIsDragging(false)
       petStateRef.current.isDragging = false
-      particleSystemRef.current.emit('star', PET_CENTER_X, PET_CENTER_Y, 4)
     }
+    isDragTrackingRef.current = false
     dragStartRef.current = null
   }, [isDragging])
 
