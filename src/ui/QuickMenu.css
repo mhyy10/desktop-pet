@@ -1,0 +1,59 @@
+.quick-menu-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 998;
+}
+
+.quick-menu {
+  position: fixed;
+  z-index: 999;
+  background: rgba(30, 30, 46, 0.95);
+  backdrop-filter: blur(12px);
+  border-radius: 12px;
+  border: 1px solid rgba(108, 92, 231, 0.3);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  padding: 6px;
+  min-width: 160px;
+  animation: menuIn 0.15s ease-out;
+}
+
+@keyframes menuIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.quick-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+  color: #DFE6E9;
+  font-size: 13px;
+  text-align: left;
+}
+
+.quick-menu-item:hover {
+  background: rgba(108, 92, 231, 0.2);
+}
+
+.item-icon {
+  font-size: 16px;
+  width: 20px;
+  text-align: center;
+}
+
+.item-label {
+  flex: 1;
+}
