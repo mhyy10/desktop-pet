@@ -1,0 +1,265 @@
+/* ============================================
+   设置面板 — 扩展 tool-panel 基类
+   ============================================ */
+
+.settings-panel {
+  width: 300px;
+  max-height: 380px;
+}
+
+.settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ---- 分组 ---- */
+
+.settings-section {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.settings-section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #A29BFE;
+  margin-bottom: 8px;
+}
+
+/* ---- 单行设置 ---- */
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.settings-row:last-child {
+  margin-bottom: 0;
+}
+
+.settings-row-center {
+  justify-content: flex-start;
+}
+
+.settings-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+  min-width: 52px;
+  flex-shrink: 0;
+}
+
+.settings-value {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* ---- 输入框 ---- */
+
+.settings-input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(108, 92, 231, 0.2);
+  border-radius: 8px;
+  padding: 5px 8px;
+  color: #DFE6E9;
+  font-size: 11px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.settings-input::placeholder {
+  color: rgba(255, 255, 255, 0.25);
+}
+
+.settings-input:focus {
+  border-color: rgba(108, 92, 231, 0.5);
+}
+
+.settings-input-short {
+  max-width: 100px;
+}
+
+/* 输入框 + 眼睛按钮组 */
+.settings-input-group {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.settings-input-group .settings-input {
+  flex: 1;
+}
+
+.settings-eye-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+
+.settings-eye-btn:hover {
+  opacity: 1;
+}
+
+/* ---- 下拉选择 ---- */
+
+.settings-select {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(108, 92, 231, 0.2);
+  border-radius: 8px;
+  padding: 5px 8px;
+  color: #DFE6E9;
+  font-size: 11px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23A29BFE'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: 22px;
+}
+
+.settings-select:focus {
+  border-color: rgba(108, 92, 231, 0.5);
+}
+
+.settings-select option {
+  background: #1e1e2e;
+  color: #DFE6E9;
+}
+
+/* ---- Toggle 开关 ---- */
+
+.settings-toggle {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.25s;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.settings-toggle.on {
+  background: rgba(0, 184, 148, 0.6);
+}
+
+.settings-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.settings-toggle.on .settings-toggle-thumb {
+  transform: translateX(16px);
+}
+
+/* ---- 滑块 ---- */
+
+.settings-range-group {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-range {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+  outline: none;
+}
+
+.settings-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  background: #A29BFE;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+.settings-range::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+.settings-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  background: #A29BFE;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+}
+
+.settings-range-value {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+  min-width: 52px;
+  text-align: right;
+}
+
+/* ---- 测试连接 ---- */
+
+.settings-test-btn {
+  background: rgba(108, 92, 231, 0.2);
+  border: 1px solid rgba(108, 92, 231, 0.3);
+  border-radius: 8px;
+  color: #A29BFE;
+  cursor: pointer;
+  padding: 4px 12px;
+  font-size: 11px;
+  transition: all 0.2s;
+}
+
+.settings-test-btn:hover:not(:disabled) {
+  background: rgba(108, 92, 231, 0.35);
+}
+
+.settings-test-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.settings-test-ok {
+  font-size: 11px;
+  color: #00B894;
+  animation: fadeIn 0.3s ease;
+}
+
+.settings-test-fail {
+  font-size: 11px;
+  color: #E17055;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

@@ -10,6 +10,12 @@
     "core:window:allow-outer-position",
     "core:window:allow-inner-size",
     "core:window:allow-set-focus",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-close",
+    "core:window:allow-is-visible",
+    "core:tray:default",
+    "core:event:default",
     "opener:default"
   ]
 }

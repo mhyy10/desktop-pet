@@ -10,7 +10,7 @@ import {
   type PetState,
   type ChatMessage,
 } from './pet'
-import { ChatEngine, AVAILABLE_MODELS, type AvailableModelId } from './ai'
+import { ChatEngine } from './ai'
 import { ChatBubble } from './ui/ChatBubble'
 import { QuickMenu } from './ui/QuickMenu'
 import { NotePanel } from './ui/NotePanel'
@@ -18,14 +18,17 @@ import { ReminderPanel } from './ui/ReminderPanel'
 import { SearchPanel } from './ui/SearchPanel'
 import { TranslatePanel } from './ui/TranslatePanel'
 import { WeatherPanel } from './ui/WeatherPanel'
-import { type Reminder, markReminderFired, loadReminders } from './utils/storage'
+import { SettingsPanel } from './ui/SettingsPanel'
+import { type Reminder, markReminderFired, loadReminders, loadSettings, type PetSettings } from './utils/storage'
 import './App.css'
 
 // Tauri API — 仅在 Tauri 环境中可用
 let tauriWindow: typeof import('@tauri-apps/api/window') | null = null
+let tauriEvent: typeof import('@tauri-apps/api/event') | null = null
 try {
   if (window.__TAURI_INTERNALS__) {
     tauriWindow = await import('@tauri-apps/api/window')
+    tauriEvent = await import('@tauri-apps/api/event')
   }
 } catch {
   // 浏览器环境，忽略
@@ -42,7 +45,7 @@ const PET_CENTER_Y = CANVAS_H / 2 + 20
 
 const isTauri = !!window.__TAURI_INTERNALS__
 
-type PanelType = 'note' | 'remind' | 'search' | 'translate' | 'weather' | null
+type PanelType = 'note' | 'remind' | 'search' | 'translate' | 'weather' | 'settings' | null
 
 export default function App() {
   // ---- 核心系统 ----
@@ -63,8 +66,7 @@ export default function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isDragging, setIsDragging] = useState(false)
   const [isReady, setIsReady] = useState(false)
-  const [currentModel, setCurrentModel] = useState<string>('zhanlu/glm-5.1')
-  const [showModelPicker, setShowModelPicker] = useState(false)
+  const [, setCurrentModel] = useState<string>('zhanlu/glm-5.1')
   const [activePanel, setActivePanel] = useState<PanelType>(null)
   const [reminderNotif, setReminderNotif] = useState<string | null>(null)
 
@@ -84,6 +86,29 @@ export default function App() {
     isDragging: false,
     isChatOpen: false,
   })
+
+  // ---- 从 storage 加载设置并初始化 ChatEngine ----
+  useEffect(() => {
+    const saved = loadSettings()
+    chatEngineRef.current.updateConfig({
+      apiKey: saved.apiKey || undefined,
+      baseUrl: saved.baseUrl,
+      model: saved.model,
+    })
+    setCurrentModel(saved.model)
+  }, [])
+
+  // ---- 监听托盘事件（打开设置） ----
+  useEffect(() => {
+    if (!isTauri || !tauriEvent) return
+    let unlisten: (() => void) | null = null
+
+    tauriEvent.listen('tray-open-settings', () => {
+      setActivePanel('settings')
+    }).then((fn) => { unlisten = fn })
+
+    return () => { unlisten?.() }
+  }, [])
 
   // ---- 初始化 ----
   useEffect(() => {
@@ -272,23 +297,15 @@ export default function App() {
   // ---- 侧边栏动作 ----
   const handleQuickAction = useCallback((actionId: string) => {
     // 切换面板（再点关闭）
-    if (['note', 'remind', 'search', 'translate', 'weather'].includes(actionId)) {
+    if (['note', 'remind', 'search', 'translate', 'weather', 'settings'].includes(actionId)) {
       setActivePanel((prev) => prev === actionId ? null : (actionId as PanelType))
       return
     }
-    switch (actionId) {
-      case 'settings':
-        setShowModelPicker((v) => !v)
-        break
-    }
   }, [handleSendMessage])
 
-  // ---- 切换模型 ----
-  const handleSwitchModel = useCallback((modelId: AvailableModelId) => {
-    chatEngineRef.current.updateConfig({ model: modelId })
-    setCurrentModel(modelId)
-    setShowModelPicker(false)
-    particleSystemRef.current.emit('sparkle', PET_CENTER_X, PET_CENTER_Y - 20, 4)
+  // ---- 设置变更回调 ----
+  const handleSettingsChange = useCallback((settings: PetSettings) => {
+    setCurrentModel(settings.model)
   }, [])
 
   // ---- 打盹粒子 ----
@@ -359,25 +376,12 @@ export default function App() {
       {activePanel === 'search' && <SearchPanel chatEngine={chatEngineRef.current} onClose={() => setActivePanel(null)} />}
       {activePanel === 'translate' && <TranslatePanel chatEngine={chatEngineRef.current} onClose={() => setActivePanel(null)} />}
       {activePanel === 'weather' && <WeatherPanel chatEngine={chatEngineRef.current} onClose={() => setActivePanel(null)} />}
-
-      {/* 模型选择器 */}
-      {showModelPicker && (
-        <>
-          <div className="model-picker-overlay" onClick={() => setShowModelPicker(false)} />
-          <div className="model-picker">
-            <div className="model-picker-title">切换模型</div>
-            {AVAILABLE_MODELS.map((m) => (
-              <button
-                key={m.id}
-                className={`model-picker-item ${currentModel === m.id ? 'active' : ''}`}
-                onClick={() => handleSwitchModel(m.id)}
-              >
-                <span className="model-name">{m.name}</span>
-                <span className="model-tag">{m.tag}</span>
-              </button>
-            ))}
-          </div>
-        </>
+      {activePanel === 'settings' && (
+        <SettingsPanel
+          chatEngine={chatEngineRef.current}
+          onClose={() => setActivePanel(null)}
+          onSettingsChange={handleSettingsChange}
+        />
       )}
     </div>
   )

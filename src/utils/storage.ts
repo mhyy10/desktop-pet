@@ -95,3 +95,43 @@ export function deleteReminder(id: string): Reminder[] {
   saveReminders(reminders)
   return reminders
 }
+
+// ---- 设置 ----
+
+export interface PetSettings {
+  apiKey: string
+  baseUrl: string
+  model: string
+  petName: string
+  autoStart: boolean
+  reminderEnabled: boolean
+  reminderInterval: number // 分钟
+}
+
+const SETTINGS_KEY = 'pet_settings'
+
+const DEFAULT_SETTINGS: PetSettings = {
+  apiKey: '',
+  baseUrl: 'http://10.155.208.190:31114/aigateway/v1',
+  model: 'zhanlu/glm-5.1',
+  petName: '小光',
+  autoStart: false,
+  reminderEnabled: true,
+  reminderInterval: 60,
+}
+
+export function loadSettings(): PetSettings {
+  return read<PetSettings>(SETTINGS_KEY, DEFAULT_SETTINGS)
+}
+
+export function saveSettings(settings: PetSettings): void {
+  write(SETTINGS_KEY, settings)
+}
+
+/** 更新部分设置项 */
+export function updateSettings(patch: Partial<PetSettings>): PetSettings {
+  const current = loadSettings()
+  const merged = { ...current, ...patch }
+  saveSettings(merged)
+  return merged
+}
