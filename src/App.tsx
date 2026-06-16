@@ -5,10 +5,12 @@ import {
   PixelRenderer,
   ParticleSystem,
   SpringPhysics2D,
+  ReminderScheduler,
   defaultTheme,
   type PetMood,
   type PetState,
   type ChatMessage,
+  type ProactiveReminder,
 } from './pet'
 import { ChatEngine } from './ai'
 import { ChatBubble } from './ui/ChatBubble'
@@ -52,6 +54,7 @@ export default function App() {
   const stateMachineRef = useRef(new StateMachine())
   const behaviorTreeRef = useRef(new BehaviorTree())
   const chatEngineRef = useRef(new ChatEngine())
+  const reminderSchedulerRef = useRef(new ReminderScheduler())
   const particleSystemRef = useRef(new ParticleSystem())
   const physicsRef = useRef(new SpringPhysics2D(PET_CENTER_X, PET_CENTER_Y))
   const pixelRendererRef = useRef<PixelRenderer | null>(null)
@@ -68,7 +71,7 @@ export default function App() {
   const [isReady, setIsReady] = useState(false)
   const [, setCurrentModel] = useState<string>('zhanlu/glm-5.1')
   const [activePanel, setActivePanel] = useState<PanelType>(null)
-  const [reminderNotif, setReminderNotif] = useState<string | null>(null)
+  const [reminderNotif, setReminderNotif] = useState<{ icon: string; text: string } | null>(null)
 
   // 拖拽 & 提醒定时器
   const isDragTrackingRef = useRef(false)
@@ -96,6 +99,22 @@ export default function App() {
       model: saved.model,
     })
     setCurrentModel(saved.model)
+
+    // 初始化主动提醒调度器
+    const scheduler = reminderSchedulerRef.current
+    scheduler.updateConfig({
+      enabled: saved.reminderEnabled,
+      intervalMinutes: saved.reminderInterval,
+    })
+    scheduler.onFire((r: ProactiveReminder) => {
+      setReminderNotif({ icon: r.icon, text: r.text })
+      particleSystemRef.current.emit('sparkle', PET_CENTER_X, PET_CENTER_Y - 30, 6)
+      stateMachineRef.current.setMood('excited')
+      setTimeout(() => setReminderNotif(null), 5000)
+    })
+    scheduler.start()
+
+    return () => { scheduler.stop() }
   }, [])
 
   // ---- 监听托盘事件（打开设置） ----
@@ -199,7 +218,7 @@ export default function App() {
     if (delay <= 0) return
 
     const timer = setTimeout(() => {
-      setReminderNotif(r.text)
+      setReminderNotif({ icon: '⏰', text: r.text })
       particleSystemRef.current.emit('sparkle', PET_CENTER_X, PET_CENTER_Y - 30, 8)
       stateMachineRef.current.setMood('excited')
       markReminderFired(r.id)
@@ -306,6 +325,11 @@ export default function App() {
   // ---- 设置变更回调 ----
   const handleSettingsChange = useCallback((settings: PetSettings) => {
     setCurrentModel(settings.model)
+    // 同步提醒调度器设置
+    reminderSchedulerRef.current.updateConfig({
+      enabled: settings.reminderEnabled,
+      intervalMinutes: settings.reminderInterval,
+    })
   }, [])
 
   // ---- 打盹粒子 ----
@@ -354,7 +378,7 @@ export default function App() {
       {/* 提醒通知 */}
       {reminderNotif && (
         <div className="reminder-notification">
-          ⏰ {reminderNotif}
+          {reminderNotif.icon} {reminderNotif.text}
         </div>
       )}
 
