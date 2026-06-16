@@ -17,6 +17,7 @@ import { NotePanel } from './ui/NotePanel'
 import { ReminderPanel } from './ui/ReminderPanel'
 import { SearchPanel } from './ui/SearchPanel'
 import { TranslatePanel } from './ui/TranslatePanel'
+import { WeatherPanel } from './ui/WeatherPanel'
 import { type Reminder, markReminderFired, loadReminders } from './utils/storage'
 import './App.css'
 
@@ -41,7 +42,7 @@ const PET_CENTER_Y = CANVAS_H / 2 + 20
 
 const isTauri = !!window.__TAURI_INTERNALS__
 
-type PanelType = 'note' | 'remind' | 'search' | 'translate' | null
+type PanelType = 'note' | 'remind' | 'search' | 'translate' | 'weather' | null
 
 export default function App() {
   // ---- 核心系统 ----
@@ -271,15 +272,11 @@ export default function App() {
   // ---- 侧边栏动作 ----
   const handleQuickAction = useCallback((actionId: string) => {
     // 切换面板（再点关闭）
-    if (['note', 'remind', 'search', 'translate'].includes(actionId)) {
+    if (['note', 'remind', 'search', 'translate', 'weather'].includes(actionId)) {
       setActivePanel((prev) => prev === actionId ? null : (actionId as PanelType))
       return
     }
     switch (actionId) {
-      case 'weather':
-        handleSendMessage('今天天气怎么样？')
-        setIsChatOpen(true)
-        break
       case 'settings':
         setShowModelPicker((v) => !v)
         break
@@ -361,6 +358,7 @@ export default function App() {
       {activePanel === 'remind' && <ReminderPanel onClose={() => setActivePanel(null)} onAdd={scheduleReminder} />}
       {activePanel === 'search' && <SearchPanel chatEngine={chatEngineRef.current} onClose={() => setActivePanel(null)} />}
       {activePanel === 'translate' && <TranslatePanel chatEngine={chatEngineRef.current} onClose={() => setActivePanel(null)} />}
+      {activePanel === 'weather' && <WeatherPanel chatEngine={chatEngineRef.current} onClose={() => setActivePanel(null)} />}
 
       {/* 模型选择器 */}
       {showModelPicker && (

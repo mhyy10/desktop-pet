@@ -444,3 +444,53 @@ html, body, #root {
   from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
   to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
+
+/* ---- 天气面板 ---- */
+
+.weather-cities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.weather-card {
+  text-align: center;
+  padding: 8px 0;
+}
+
+.weather-main {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.weather-icon {
+  font-size: 28px;
+}
+
+.weather-temp {
+  font-size: 24px;
+  font-weight: 700;
+  color: #DFE6E9;
+}
+
+.weather-city {
+  font-size: 13px;
+  color: #A29BFE;
+  margin-top: 4px;
+}
+
+.weather-desc {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-top: 4px;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.weather-detail {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  margin-top: 6px;
+}
