@@ -10,7 +10,7 @@ import {
   type PetState,
   type ChatMessage,
 } from './pet'
-import { ChatEngine } from './ai'
+import { ChatEngine, AVAILABLE_MODELS, type AvailableModelId } from './ai'
 import { ChatBubble } from './ui/ChatBubble'
 import { QuickMenu } from './ui/QuickMenu'
 import './App.css'
@@ -55,9 +55,11 @@ export default function App() {
   const [mood, setMood] = useState<PetMood>('happy')
   const [isChatOpen, setIsChatOpen] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [quickMenu, setQuickMenu] = useState<{ x: number; y: number } | null>(null)
+  // quickMenu 已改为常驻侧边栏，不再需要坐标状态
   const [isDragging, setIsDragging] = useState(false)
   const [isReady, setIsReady] = useState(false)
+  const [currentModel, setCurrentModel] = useState<string>('zhanlu/glm-5.1')
+  const [showModelPicker, setShowModelPicker] = useState(false)
 
   // 拖拽状态
   const isDragTrackingRef = useRef(false)
@@ -186,11 +188,7 @@ export default function App() {
     setIsChatOpen(true)
   }, [])
 
-  // ---- 交互：右键菜单 ----
-  const handleContextMenu = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    setQuickMenu({ x: e.clientX, y: e.clientY })
-  }, [])
+  // ---- 右键不再弹出菜单（已改为常驻侧边栏） ----
 
   // ---- 交互：拖拽（Tauri 桌面环境 → 拖动窗口 / 浏览器 → Canvas 内拖动） ----
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -301,10 +299,21 @@ export default function App() {
         handleSendMessage('今天天气怎么样？')
         setIsChatOpen(true)
         break
+      case 'settings':
+        setShowModelPicker((v) => !v)
+        break
       default:
         break
     }
   }, [handleSendMessage])
+
+  // ---- 切换模型 ----
+  const handleSwitchModel = useCallback((modelId: AvailableModelId) => {
+    chatEngineRef.current.updateConfig({ model: modelId })
+    setCurrentModel(modelId)
+    setShowModelPicker(false)
+    particleSystemRef.current.emit('sparkle', PET_CENTER_X, PET_CENTER_Y - 20, 4)
+  }, [])
 
   // ---- 周期性粒子效果（打盹时 zzZ） ----
   useEffect(() => {
@@ -323,7 +332,7 @@ export default function App() {
   return (
     <div
       className="pet-container"
-      onContextMenu={handleContextMenu}
+      onContextMenu={(e) => e.preventDefault()}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
@@ -361,14 +370,27 @@ export default function App() {
         />
       )}
 
-      {/* 右键菜单 */}
-      {quickMenu && (
-        <QuickMenu
-          x={quickMenu.x}
-          y={quickMenu.y}
-          onAction={handleQuickAction}
-          onClose={() => setQuickMenu(null)}
-        />
+      {/* 侧边栏（常驻，hover 展开） */}
+      <QuickMenu onAction={handleQuickAction} />
+
+      {/* 模型选择器 */}
+      {showModelPicker && (
+        <>
+          <div className="model-picker-overlay" onClick={() => setShowModelPicker(false)} />
+          <div className="model-picker">
+            <div className="model-picker-title">切换模型</div>
+            {AVAILABLE_MODELS.map((m) => (
+              <button
+                key={m.id}
+                className={`model-picker-item ${currentModel === m.id ? 'active' : ''}`}
+                onClick={() => handleSwitchModel(m.id)}
+              >
+                <span className="model-name">{m.name}</span>
+                <span className="model-tag">{m.tag}</span>
+              </button>
+            ))}
+          </div>
+        </>
       )}
     </div>
   )

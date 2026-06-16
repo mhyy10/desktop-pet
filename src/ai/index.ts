@@ -1,1 +1,1 @@
-export { ChatEngine } from './ChatEngine'
+export { ChatEngine, AVAILABLE_MODELS, type AvailableModelId } from './ChatEngine'

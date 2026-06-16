@@ -15,6 +15,18 @@ interface ChatEngineConfig {
   systemPrompt?: string
 }
 
+/** 可用模型列表 */
+export const AVAILABLE_MODELS = [
+  { id: 'zhanlu/glm-5.1', name: 'GLM 5.1', tag: '推荐' },
+  { id: 'zhanlu/qwen3.6-plus', name: 'Qwen 3.6 Plus', tag: '均衡' },
+  { id: 'zhanlu/qwen3.6-35b-a3b', name: 'Qwen 3.6 35B', tag: '轻量' },
+  { id: 'zhanlu/glm-4.7', name: 'GLM 4.7', tag: '经典' },
+  { id: 'zhanlu/minimax-m3', name: 'MiniMax M3', tag: '创意' },
+  { id: 'zhanlu/minimax-2.7', name: 'MiniMax 2.7', tag: '快速' },
+] as const
+
+export type AvailableModelId = (typeof AVAILABLE_MODELS)[number]['id']
+
 const DEFAULT_SYSTEM_PROMPT = `你是小光（Lumie），一只住在用户桌面上的 AI 小精灵。
 你的性格：温暖、好奇、偶尔调皮、靠谱。
 说话风格：温柔但不过分甜腻，偶尔来点小幽默，用中文回复。
@@ -25,13 +37,16 @@ export class ChatEngine {
   private config: ChatEngineConfig
   private history: ChatMessage[] = []
   private abortController: AbortController | null = null
+  /** 连续失败计数，超过阈值自动 fallback */
+  private failCount = 0
+  private static readonly MAX_FAIL = 3
 
   constructor(config?: Partial<ChatEngineConfig>) {
     this.config = {
-      mode: config?.mode ?? 'mock',
-      apiKey: config?.apiKey,
-      baseUrl: config?.baseUrl ?? 'https://api.openai.com/v1',
-      model: config?.model ?? 'gpt-4o-mini',
+      mode: config?.mode ?? 'cloud',
+      apiKey: config?.apiKey ?? 'sk-cOz4wWrca5cvaus59jR6FQ',
+      baseUrl: config?.baseUrl ?? 'http://10.155.208.190:31114/aigateway/v1',
+      model: config?.model ?? 'zhanlu/glm-5.1',
       systemPrompt: config?.systemPrompt ?? DEFAULT_SYSTEM_PROMPT,
     }
   }
@@ -49,8 +64,21 @@ export class ChatEngine {
 
     let reply: string
 
-    if (this.config.mode === 'cloud' && this.config.apiKey) {
-      reply = await this.callCloudAPI(userText)
+    // 连续失败过多时自动 fallback 到 mock
+    const shouldUseCloud =
+      this.config.mode === 'cloud' &&
+      this.config.apiKey &&
+      this.failCount < ChatEngine.MAX_FAIL
+
+    if (shouldUseCloud) {
+      try {
+        reply = await this.callCloudAPI(userText)
+        this.failCount = 0 // 成功则重置
+      } catch {
+        this.failCount++
+        console.warn(`[ChatEngine] cloud fail (${this.failCount}/${ChatEngine.MAX_FAIL}), fallback to mock`)
+        reply = await this.mockReply(userText)
+      }
     } else {
       reply = await this.mockReply(userText)
     }
@@ -78,9 +106,24 @@ export class ChatEngine {
     this.history = []
   }
 
-  /** 更新配置 */
+  /** 更新配置（如切换模型） */
   updateConfig(config: Partial<ChatEngineConfig>) {
     this.config = { ...this.config, ...config }
+    // 切换到 cloud 时重置失败计数
+    if (config.mode === 'cloud' || config.model) {
+      this.failCount = 0
+    }
+  }
+
+  /** 获取当前模型名 */
+  get currentModel(): string {
+    return this.config.model ?? 'unknown'
+  }
+
+  /** 获取当前模式 */
+  get currentMode(): ChatEngineMode {
+    if (this.failCount >= ChatEngine.MAX_FAIL) return 'mock'
+    return this.config.mode
   }
 
   get messages(): ChatMessage[] {
@@ -95,34 +138,37 @@ export class ChatEngine {
     const messages = [
       { role: 'system' as const, content: this.config.systemPrompt! },
       ...this.history.slice(-10).map((m) => ({
-        role: m.role === 'pet' ? 'assistant' : 'user',
+        role: m.role === 'pet' ? 'assistant' : ('user' as const),
         content: m.content,
       })),
     ]
 
-    try {
-      const response = await fetch(`${this.config.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.config.apiKey}`,
-        },
-        body: JSON.stringify({
-          model: this.config.model,
-          messages,
-          max_tokens: 200,
-          temperature: 0.8,
-        }),
-        signal: this.abortController.signal,
-      })
+    const response = await fetch(`${this.config.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.config.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: this.config.model,
+        messages,
+        max_tokens: 200,
+        temperature: 0.8,
+      }),
+      signal: this.abortController.signal,
+    })
 
-      const data = await response.json()
-      return data.choices?.[0]?.message?.content ?? '…嗯？好像出了点问题'
-    } catch (err: unknown) {
-      if ((err as Error).name === 'AbortError') return '…'
-      console.error('[ChatEngine] API error:', err)
-      return '啊哦，连接不上大脑了… 🥺'
+    // 状态码检查
+    if (!response.ok) {
+      const body = await response.text().catch(() => '')
+      throw new Error(`API ${response.status}: ${body.slice(0, 120)}`)
     }
+
+    const data = await response.json()
+    const content = data.choices?.[0]?.message?.content
+    if (!content) throw new Error('empty response')
+
+    return content
   }
 
   // ---- 本地模拟回复 ----

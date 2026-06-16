@@ -1,40 +1,37 @@
 import './QuickMenu.css'
 
 interface QuickMenuProps {
-  x: number
-  y: number
   onAction: (action: string) => void
-  onClose: () => void
 }
 
 const menuItems = [
-  { id: 'note', icon: '📝', label: '快速笔记' },
-  { id: 'remind', icon: '⏰', label: '设置提醒' },
+  { id: 'note', icon: '📝', label: '笔记' },
+  { id: 'remind', icon: '⏰', label: '提醒' },
   { id: 'search', icon: '🔍', label: '搜索' },
   { id: 'translate', icon: '🌐', label: '翻译' },
   { id: 'weather', icon: '🌤', label: '天气' },
   { id: 'settings', icon: '⚙️', label: '设置' },
 ]
 
-export function QuickMenu({ x, y, onAction, onClose }: QuickMenuProps) {
+export function QuickMenu({ onAction }: QuickMenuProps) {
   return (
     <>
-      <div className="quick-menu-overlay" onClick={onClose} />
-      <div className="quick-menu" style={{ left: x, top: y }}>
+      {/* 右边缘隐形触发热区 */}
+      <div className="sidebar-trigger" />
+      {/* 侧边栏面板 */}
+      <nav className="pet-sidebar">
         {menuItems.map((item) => (
           <button
             key={item.id}
-            className="quick-menu-item"
-            onClick={() => {
-              onAction(item.id)
-              onClose()
-            }}
+            className="sidebar-item"
+            onClick={() => onAction(item.id)}
+            title={item.label}
           >
-            <span className="item-icon">{item.icon}</span>
-            <span className="item-label">{item.label}</span>
+            <span className="sidebar-icon">{item.icon}</span>
+            <span className="sidebar-label">{item.label}</span>
           </button>
         ))}
-      </div>
+      </nav>
     </>
   )
 }
