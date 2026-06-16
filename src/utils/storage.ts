@@ -103,6 +103,7 @@ export interface PetSettings {
   baseUrl: string
   model: string
   petName: string
+  skin: string
   autoStart: boolean
   reminderEnabled: boolean
   reminderInterval: number // 分钟
@@ -115,6 +116,7 @@ const DEFAULT_SETTINGS: PetSettings = {
   baseUrl: 'http://10.155.208.190:31114/aigateway/v1',
   model: 'zhanlu/glm-5.1',
   petName: '小光',
+  skin: 'lumie',
   autoStart: false,
   reminderEnabled: true,
   reminderInterval: 60,

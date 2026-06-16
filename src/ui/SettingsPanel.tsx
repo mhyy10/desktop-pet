@@ -6,6 +6,7 @@ import {
 } from '../utils/storage'
 import { AVAILABLE_MODELS } from '../ai'
 import type { ChatEngine } from '../ai'
+import { SKINS } from '../pet'
 import './SettingsPanel.css'
 
 interface SettingsPanelProps {
@@ -22,7 +23,6 @@ export function SettingsPanel({ chatEngine, onClose, onSettingsChange }: Setting
   const panelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    // ESC 关闭
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
     }
@@ -56,7 +56,6 @@ export function SettingsPanel({ chatEngine, onClose, onSettingsChange }: Setting
       setTestResult('fail')
     }
     setTesting(false)
-    // 5 秒后清除结果
     setTimeout(() => setTestResult(null), 5000)
   }
 
@@ -70,6 +69,24 @@ export function SettingsPanel({ chatEngine, onClose, onSettingsChange }: Setting
         </div>
 
         <div className="tool-panel-body settings-body">
+          {/* ---- 皮肤 ---- */}
+          <div className="settings-section">
+            <div className="settings-section-title">🎨 皮肤</div>
+            <div className="skin-grid">
+              {SKINS.map((skin) => (
+                <button
+                  key={skin.id}
+                  className={`skin-card ${settings.skin === skin.id ? 'active' : ''}`}
+                  onClick={() => handleChange({ skin: skin.id })}
+                  title={skin.description}
+                >
+                  <span className="skin-icon">{skin.icon}</span>
+                  <span className="skin-name">{skin.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* ---- AI 模型 ---- */}
           <div className="settings-section">
             <div className="settings-section-title">🤖 AI 模型</div>

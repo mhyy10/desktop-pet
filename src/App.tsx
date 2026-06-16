@@ -6,11 +6,12 @@ import {
   ParticleSystem,
   SpringPhysics2D,
   ReminderScheduler,
-  defaultTheme,
+  getThemeBySkin,
   type PetMood,
   type PetState,
   type ChatMessage,
   type ProactiveReminder,
+  type SkinId,
 } from './pet'
 import { ChatEngine } from './ai'
 import { ChatBubble } from './ui/ChatBubble'
@@ -90,7 +91,7 @@ export default function App() {
     isChatOpen: false,
   })
 
-  // ---- 从 storage 加载设置并初始化 ChatEngine ----
+  // ---- 从 storage 加载设置并初始化 ----
   useEffect(() => {
     const saved = loadSettings()
     chatEngineRef.current.updateConfig({
@@ -134,8 +135,10 @@ export default function App() {
     const canvas = canvasRef.current
     if (!canvas) return
 
+    const saved = loadSettings()
+    const theme = getThemeBySkin((saved.skin || 'lumie') as SkinId)
     const ctx = canvas.getContext('2d')!
-    const renderer = new PixelRenderer(ctx, defaultTheme)
+    const renderer = new PixelRenderer(ctx, theme)
 
     renderer.init().then(() => {
       pixelRendererRef.current = renderer
@@ -330,6 +333,12 @@ export default function App() {
       enabled: settings.reminderEnabled,
       intervalMinutes: settings.reminderInterval,
     })
+    // 切换皮肤 → 重新生成精灵图
+    if (pixelRendererRef.current) {
+      const theme = getThemeBySkin((settings.skin || 'lumie') as SkinId)
+      pixelRendererRef.current.reinit(theme)
+      particleSystemRef.current.emit('sparkle', PET_CENTER_X, PET_CENTER_Y - 20, 8)
+    }
   }, [])
 
   // ---- 打盹粒子 ----

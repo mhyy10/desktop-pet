@@ -263,3 +263,50 @@
   from { opacity: 0; }
   to { opacity: 1; }
 }
+
+/* ---- 皮肤选择 ---- */
+
+.skin-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+
+.skin-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 8px 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(108, 92, 231, 0.15);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #DFE6E9;
+}
+
+.skin-card:hover {
+  background: rgba(108, 92, 231, 0.15);
+  border-color: rgba(108, 92, 231, 0.3);
+}
+
+.skin-card.active {
+  background: rgba(108, 92, 231, 0.25);
+  border-color: rgba(108, 92, 231, 0.5);
+  box-shadow: 0 0 8px rgba(108, 92, 231, 0.2);
+}
+
+.skin-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.skin-name {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+.skin-card.active .skin-name {
+  opacity: 1;
+}

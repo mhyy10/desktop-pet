@@ -30,6 +30,13 @@ export class PixelRenderer {
     this._isReady = true
   }
 
+  /** 切换主题后重新生成精灵图 */
+  async reinit(newTheme: PetTheme): Promise<void> {
+    this.theme = newTheme
+    this._isReady = false
+    await this.init()
+  }
+
   get isReady(): boolean {
     return this._isReady
   }
