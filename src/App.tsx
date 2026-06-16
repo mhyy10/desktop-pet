@@ -13,12 +13,16 @@ import {
 import { ChatEngine, AVAILABLE_MODELS, type AvailableModelId } from './ai'
 import { ChatBubble } from './ui/ChatBubble'
 import { QuickMenu } from './ui/QuickMenu'
+import { NotePanel } from './ui/NotePanel'
+import { ReminderPanel } from './ui/ReminderPanel'
+import { SearchPanel } from './ui/SearchPanel'
+import { TranslatePanel } from './ui/TranslatePanel'
+import { type Reminder, markReminderFired, loadReminders } from './utils/storage'
 import './App.css'
 
 // Tauri API — 仅在 Tauri 环境中可用
 let tauriWindow: typeof import('@tauri-apps/api/window') | null = null
 try {
-  // 动态检测是否在 Tauri 环境中
   if (window.__TAURI_INTERNALS__) {
     tauriWindow = await import('@tauri-apps/api/window')
   }
@@ -35,11 +39,12 @@ const CANVAS_H = 350
 const PET_CENTER_X = CANVAS_W / 2
 const PET_CENTER_Y = CANVAS_H / 2 + 20
 
-/** 是否运行在 Tauri 桌面环境中 */
 const isTauri = !!window.__TAURI_INTERNALS__
 
+type PanelType = 'note' | 'remind' | 'search' | 'translate' | null
+
 export default function App() {
-  // ---- 核心系统（只用 useRef 存，避免重渲染） ----
+  // ---- 核心系统 ----
   const stateMachineRef = useRef(new StateMachine())
   const behaviorTreeRef = useRef(new BehaviorTree())
   const chatEngineRef = useRef(new ChatEngine())
@@ -55,18 +60,20 @@ export default function App() {
   const [mood, setMood] = useState<PetMood>('happy')
   const [isChatOpen, setIsChatOpen] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([])
-  // quickMenu 已改为常驻侧边栏，不再需要坐标状态
   const [isDragging, setIsDragging] = useState(false)
   const [isReady, setIsReady] = useState(false)
   const [currentModel, setCurrentModel] = useState<string>('zhanlu/glm-5.1')
   const [showModelPicker, setShowModelPicker] = useState(false)
+  const [activePanel, setActivePanel] = useState<PanelType>(null)
+  const [reminderNotif, setReminderNotif] = useState<string | null>(null)
 
-  // 拖拽状态
+  // 拖拽 & 提醒定时器
   const isDragTrackingRef = useRef(false)
   const dragStartRef = useRef<{ x: number; y: number } | null>(null)
   const hasMovedRef = useRef(false)
+  const reminderTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 
-  // ---- 宠物状态（非响应式，每帧读取） ----
+  // ---- 宠物状态 ----
   const petStateRef = useRef<PetState>({
     mood: 'happy',
     action: 'idle_stand',
@@ -77,7 +84,7 @@ export default function App() {
     isChatOpen: false,
   })
 
-  // ---- 初始化：生成精灵图 ----
+  // ---- 初始化 ----
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -89,17 +96,20 @@ export default function App() {
       pixelRendererRef.current = renderer
       setIsReady(true)
 
-      // 欢迎消息
       const greeting = stateMachineRef.current.getRandomGreeting()
-      setMessages([
-        {
-          id: crypto.randomUUID(),
-          role: 'pet',
-          content: greeting,
-          timestamp: Date.now(),
-        },
-      ])
+      setMessages([{
+        id: crypto.randomUUID(),
+        role: 'pet',
+        content: greeting,
+        timestamp: Date.now(),
+      }])
     })
+  }, [])
+
+  // ---- 恢复未触发的提醒定时器 ----
+  useEffect(() => {
+    const pending = loadReminders().filter((r) => !r.fired && r.time > Date.now())
+    pending.forEach((r) => scheduleReminder(r))
   }, [])
 
   // ---- 状态机回调 ----
@@ -112,7 +122,7 @@ export default function App() {
     return () => unsub()
   }, [])
 
-  // ---- 同步 isChatOpen 到 ref ----
+  // ---- 同步 isChatOpen ----
   useEffect(() => {
     petStateRef.current.isChatOpen = isChatOpen
   }, [isChatOpen])
@@ -135,35 +145,18 @@ export default function App() {
       const delta = now - lastTimeRef.current
       lastTimeRef.current = now
 
-      // 清空画布（透明背景）
       ctx.clearRect(0, 0, CANVAS_W, CANVAS_H)
 
-      // 更新物理
       const pos = physics.update()
-
-      // 更新行为树
       const currentAction = bt.tick(petStateRef.current, delta)
       petStateRef.current.action = currentAction
 
-      // 更新状态机（每秒检查一次）
       if (Math.floor(now / 1000) !== Math.floor((now - delta) / 1000)) {
         sm.tick(petStateRef.current)
       }
 
-      // 更新动画控制器
       renderer.tick(delta)
-
-      // 绘制宠物（像素风）
-      renderer.draw(
-        sm.mood,
-        petStateRef.current.action,
-        pos.x,
-        pos.y,
-        now,
-        petStateRef.current.scale
-      )
-
-      // 更新和绘制粒子
+      renderer.draw(sm.mood, petStateRef.current.action, pos.x, pos.y, now, petStateRef.current.scale)
       particles.update(delta)
       particles.draw(ctx)
 
@@ -174,41 +167,48 @@ export default function App() {
     return () => cancelAnimationFrame(animFrameRef.current)
   }, [isReady])
 
-  // ---- 交互：点击宠物 ----
+  // ---- 提醒调度 ----
+  const scheduleReminder = useCallback((r: Reminder) => {
+    const delay = r.time - Date.now()
+    if (delay <= 0) return
+
+    const timer = setTimeout(() => {
+      setReminderNotif(r.text)
+      particleSystemRef.current.emit('sparkle', PET_CENTER_X, PET_CENTER_Y - 30, 8)
+      stateMachineRef.current.setMood('excited')
+      markReminderFired(r.id)
+      reminderTimersRef.current.delete(r.id)
+
+      // 5 秒后自动关闭通知
+      setTimeout(() => setReminderNotif(null), 5000)
+    }, delay)
+
+    reminderTimersRef.current.set(r.id, timer)
+  }, [])
+
+  // ---- 点击宠物 ----
   const handlePetClick = useCallback(() => {
-    if (hasMovedRef.current) return // 拖拽过就不触发点击
-
+    if (hasMovedRef.current) return
     petStateRef.current.lastInteractionTime = Date.now()
-
-    // 开心 + 星星粒子
     stateMachineRef.current.setMood('happy')
     particleSystemRef.current.emit('sparkle', PET_CENTER_X, PET_CENTER_Y - 20, 6)
-
-    // 打开对话
     setIsChatOpen(true)
   }, [])
 
-  // ---- 右键不再弹出菜单（已改为常驻侧边栏） ----
-
-  // ---- 交互：拖拽（Tauri 桌面环境 → 拖动窗口 / 浏览器 → Canvas 内拖动） ----
+  // ---- 拖拽 ----
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (e.button !== 0) return // 只响应左键
-
+    if (e.button !== 0) return
     isDragTrackingRef.current = true
     hasMovedRef.current = false
     dragStartRef.current = { x: e.clientX, y: e.clientY }
 
-    // Tauri 环境：立即调用 startDragging 让操作系统接管拖拽
     if (isTauri && tauriWindow) {
-      tauriWindow.getCurrentWindow().startDragging().catch(() => {
-        // startDragging 失败则回退到手动拖拽
-      })
+      tauriWindow.getCurrentWindow().startDragging().catch(() => {})
       setIsDragging(true)
       petStateRef.current.isDragging = true
     }
   }, [])
 
-  // 浏览器环境的 fallback 拖拽（Tauri 用 startDragging 不需要这些）
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (!isDragTrackingRef.current || isTauri) return
 
@@ -221,17 +221,13 @@ export default function App() {
         petStateRef.current.isDragging = true
       }
       hasMovedRef.current = true
-
-      const newX = PET_CENTER_X + dx
-      const newY = PET_CENTER_Y + dy
-      physicsRef.current.stretch(newX, newY)
+      physicsRef.current.stretch(PET_CENTER_X + dx, PET_CENTER_Y + dy)
     }
   }, [isDragging])
 
   const handleMouseUp = useCallback(() => {
     if (isDragging) {
       if (!isTauri) {
-        // 浏览器环境：弹回中心
         physicsRef.current.setTarget(PET_CENTER_X, PET_CENTER_Y)
       }
       particleSystemRef.current.emit('star', PET_CENTER_X, PET_CENTER_Y, 4)
@@ -242,7 +238,7 @@ export default function App() {
     dragStartRef.current = null
   }, [isDragging])
 
-  // ---- 交互：发送消息 ----
+  // ---- 发送消息 ----
   const handleSendMessage = useCallback(async (text: string) => {
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
@@ -253,15 +249,11 @@ export default function App() {
     setMessages((prev) => [...prev, userMsg])
     petStateRef.current.lastInteractionTime = Date.now()
 
-    // 思考状态
     stateMachineRef.current.setMood('thinking')
-    particleSystemRef.current.emit('sparkle', PET_CENTER_X, PET_CENTER_Y - 30, 3, {
-      size: 0.6,
-    })
+    particleSystemRef.current.emit('sparkle', PET_CENTER_X, PET_CENTER_Y - 30, 3, { size: 0.6 })
 
     try {
       const reply = await chatEngineRef.current.chat(text)
-
       const petMsg: ChatMessage = {
         id: crypto.randomUUID(),
         role: 'pet',
@@ -276,33 +268,20 @@ export default function App() {
     }
   }, [])
 
-  // ---- 交互：快捷菜单 ----
+  // ---- 侧边栏动作 ----
   const handleQuickAction = useCallback((actionId: string) => {
+    // 切换面板（再点关闭）
+    if (['note', 'remind', 'search', 'translate'].includes(actionId)) {
+      setActivePanel((prev) => prev === actionId ? null : (actionId as PanelType))
+      return
+    }
     switch (actionId) {
-      case 'note':
-        handleSendMessage('帮我记一条笔记')
-        setIsChatOpen(true)
-        break
-      case 'remind':
-        handleSendMessage('帮我设一个提醒')
-        setIsChatOpen(true)
-        break
-      case 'search':
-        handleSendMessage('帮我搜索一下')
-        setIsChatOpen(true)
-        break
-      case 'translate':
-        handleSendMessage('帮我翻译')
-        setIsChatOpen(true)
-        break
       case 'weather':
         handleSendMessage('今天天气怎么样？')
         setIsChatOpen(true)
         break
       case 'settings':
         setShowModelPicker((v) => !v)
-        break
-      default:
         break
     }
   }, [handleSendMessage])
@@ -315,14 +294,11 @@ export default function App() {
     particleSystemRef.current.emit('sparkle', PET_CENTER_X, PET_CENTER_Y - 20, 4)
   }, [])
 
-  // ---- 周期性粒子效果（打盹时 zzZ） ----
+  // ---- 打盹粒子 ----
   useEffect(() => {
     const interval = setInterval(() => {
       if (stateMachineRef.current.mood === 'sleeping') {
-        particleSystemRef.current.emit('zzz', PET_CENTER_X, PET_CENTER_Y - 50, 1, {
-          speed: 0.5,
-          size: 0.8,
-        })
+        particleSystemRef.current.emit('zzz', PET_CENTER_X, PET_CENTER_Y - 50, 1, { speed: 0.5, size: 0.8 })
       }
     }, 2000)
     return () => clearInterval(interval)
@@ -361,6 +337,13 @@ export default function App() {
         <span className="mood-text">{moodLabel(mood)}</span>
       </div>
 
+      {/* 提醒通知 */}
+      {reminderNotif && (
+        <div className="reminder-notification">
+          ⏰ {reminderNotif}
+        </div>
+      )}
+
       {/* 对话气泡 */}
       {isChatOpen && (
         <ChatBubble
@@ -370,8 +353,14 @@ export default function App() {
         />
       )}
 
-      {/* 侧边栏（常驻，hover 展开） */}
+      {/* 侧边栏 */}
       <QuickMenu onAction={handleQuickAction} />
+
+      {/* 工具面板 */}
+      {activePanel === 'note' && <NotePanel onClose={() => setActivePanel(null)} />}
+      {activePanel === 'remind' && <ReminderPanel onClose={() => setActivePanel(null)} onAdd={scheduleReminder} />}
+      {activePanel === 'search' && <SearchPanel chatEngine={chatEngineRef.current} onClose={() => setActivePanel(null)} />}
+      {activePanel === 'translate' && <TranslatePanel chatEngine={chatEngineRef.current} onClose={() => setActivePanel(null)} />}
 
       {/* 模型选择器 */}
       {showModelPicker && (
@@ -400,14 +389,8 @@ export default function App() {
 
 function moodColor(mood: PetMood): string {
   const colors: Record<PetMood, string> = {
-    happy: '#FDCB6E',
-    idle: '#74B9FF',
-    bored: '#A29BFE',
-    sleeping: '#636E72',
-    excited: '#00B894',
-    shy: '#FD79A8',
-    angry: '#E17055',
-    thinking: '#0984E3',
+    happy: '#FDCB6E', idle: '#74B9FF', bored: '#A29BFE', sleeping: '#636E72',
+    excited: '#00B894', shy: '#FD79A8', angry: '#E17055', thinking: '#0984E3',
     surprised: '#FFEAA7',
   }
   return colors[mood]
@@ -415,14 +398,8 @@ function moodColor(mood: PetMood): string {
 
 function moodLabel(mood: PetMood): string {
   const labels: Record<PetMood, string> = {
-    happy: '开心',
-    idle: '平静',
-    bored: '无聊',
-    sleeping: '打盹',
-    excited: '兴奋',
-    shy: '害羞',
-    angry: '生气',
-    thinking: '思考',
+    happy: '开心', idle: '平静', bored: '无聊', sleeping: '打盹',
+    excited: '兴奋', shy: '害羞', angry: '生气', thinking: '思考',
     surprised: '惊讶',
   }
   return labels[mood]

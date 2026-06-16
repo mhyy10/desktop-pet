@@ -130,6 +130,71 @@ export class ChatEngine {
     return [...this.history]
   }
 
+  // ---- 搜索（LLM 回答，更详细） ----
+
+  async search(query: string): Promise<string> {
+    const SEARCH_PROMPT = `你是一个搜索助手。用户会提出问题，你需要给出准确、有用的回答。
+回答要条理清晰，可以用分点列举。用中文回答。控制在200字以内。`
+    return this.callWithPrompt(SEARCH_PROMPT, query)
+  }
+
+  // ---- 翻译（纯输出译文） ----
+
+  async translate(text: string, direction: 'zh2en' | 'en2zh'): Promise<string> {
+    const TRANSLATE_PROMPT =
+      direction === 'zh2en'
+        ? `你是一个翻译器。将用户输入的中文翻译成英文。只输出译文，不要任何解释或额外文字。`
+        : `你是一个翻译器。将用户输入的英文翻译成中文。只输出译文，不要任何解释或额外文字。`
+    return this.callWithPrompt(TRANSLATE_PROMPT, text)
+  }
+
+  // ---- 通用：自定义 system prompt 调用 ----
+
+  private async callWithPrompt(systemPrompt: string, userText: string): Promise<string> {
+    const shouldUseCloud =
+      this.config.mode === 'cloud' && this.config.apiKey && this.failCount < ChatEngine.MAX_FAIL
+
+    if (!shouldUseCloud) {
+      return '…连接不上大脑，稍后再试 🥺'
+    }
+
+    try {
+      this.abortController = new AbortController()
+      const response = await fetch(`${this.config.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.config.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: this.config.model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userText },
+          ],
+          max_tokens: 300,
+          temperature: 0.5,
+        }),
+        signal: this.abortController.signal,
+      })
+
+      if (!response.ok) {
+        const body = await response.text().catch(() => '')
+        throw new Error(`API ${response.status}: ${body.slice(0, 120)}`)
+      }
+
+      const data = await response.json()
+      const content = data.choices?.[0]?.message?.content
+      if (!content) throw new Error('empty response')
+      this.failCount = 0
+      return content
+    } catch (err) {
+      this.failCount++
+      console.warn('[ChatEngine] callWithPrompt fail:', err)
+      return '…出了点问题，再试一次？ 🥺'
+    }
+  }
+
   // ---- 云端 API ----
 
   private async callCloudAPI(_userText: string): Promise<string> {
