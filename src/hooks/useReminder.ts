@@ -1,5 +1,5 @@
 import { useRef, useEffect, useCallback } from 'react'
-import { ReminderScheduler, type ProactiveReminder } from '../pet'
+import { ReminderScheduler, audioManager, type ProactiveReminder } from '../pet'
 import { loadReminders, markReminderFired, type Reminder } from '../utils/storage'
 import { usePetStore } from '../store/petStore'
 
@@ -33,6 +33,7 @@ export function useReminder(
       store.getState().setReminderNotif({ icon: r.icon, text: r.text })
       getParticleSystem().emit('sparkle', PET_CENTER_X, PET_CENTER_Y - 30, 6)
       getStateMachine().setMood('excited')
+      audioManager.play('reminder')
       setTimeout(() => store.getState().setReminderNotif(null), 5000)
     })
 
@@ -55,6 +56,7 @@ export function useReminder(
       store.getState().setReminderNotif({ icon: '⏰', text: r.text })
       getParticleSystem().emit('sparkle', PET_CENTER_X, PET_CENTER_Y - 30, 8)
       getStateMachine().setMood('excited')
+      audioManager.play('reminder')
       markReminderFired(r.id)
       reminderTimersRef.current.delete(r.id)
 

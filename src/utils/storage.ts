@@ -107,6 +107,8 @@ export interface PetSettings {
   autoStart: boolean
   reminderEnabled: boolean
   reminderInterval: number // 分钟
+  soundEnabled: boolean
+  soundVolume: number // 0~1
 }
 
 const SETTINGS_KEY = 'pet_settings'
@@ -120,6 +122,8 @@ const DEFAULT_SETTINGS: PetSettings = {
   autoStart: false,
   reminderEnabled: true,
   reminderInterval: 60,
+  soundEnabled: true,
+  soundVolume: 0.3,
 }
 
 export function loadSettings(): PetSettings {

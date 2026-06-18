@@ -6,7 +6,7 @@ import {
 } from '../utils/storage'
 import { AVAILABLE_MODELS } from '../ai'
 import type { ChatEngine } from '../ai'
-import { SKINS } from '../pet'
+import { SKINS, audioManager } from '../pet'
 import './SettingsPanel.css'
 
 interface SettingsPanelProps {
@@ -190,6 +190,60 @@ export function SettingsPanel({ chatEngine, onClose, onSettingsChange }: Setting
                   />
                   <span className="settings-range-value">{settings.reminderInterval} 分钟</span>
                 </div>
+              </div>
+            )}
+          </div>
+
+          {/* ---- 音效 ---- */}
+          <div className="settings-section">
+            <div className="settings-section-title">🔊 音效</div>
+
+            <div className="settings-row settings-row-center">
+              <label className="settings-label">启用音效</label>
+              <button
+                className={`settings-toggle ${settings.soundEnabled ? 'on' : ''}`}
+                onClick={() => {
+                  handleChange({ soundEnabled: !settings.soundEnabled })
+                  audioManager.setEnabled(!settings.soundEnabled)
+                }}
+              >
+                <span className="settings-toggle-thumb" />
+              </button>
+            </div>
+
+            {settings.soundEnabled && (
+              <div className="settings-row">
+                <label className="settings-label">音量</label>
+                <div className="settings-range-group">
+                  <input
+                    className="settings-range"
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={10}
+                    value={Math.round(settings.soundVolume * 100)}
+                    onChange={(e) => {
+                      const vol = Number(e.target.value) / 100
+                      handleChange({ soundVolume: vol })
+                      audioManager.setVolume(vol)
+                    }}
+                  />
+                  <span className="settings-range-value">{Math.round(settings.soundVolume * 100)}%</span>
+                </div>
+              </div>
+            )}
+
+            {settings.soundEnabled && (
+              <div className="settings-row settings-row-center">
+                <button
+                  className="settings-test-btn"
+                  onClick={() => {
+                    audioManager.init()
+                    audioManager.play('click')
+                  }}
+                >
+                  🔔 试听音效
+                </button>
               </div>
             )}
           </div>

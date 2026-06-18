@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback } from 'react'
 import { ChatEngine } from '../ai'
-import { getThemeBySkin, type SkinId } from '../pet'
+import { getThemeBySkin, audioManager, type SkinId } from '../pet'
 import { loadSettings, type PetSettings } from '../utils/storage'
 import { usePetStore, type PanelType } from '../store/petStore'
 
@@ -30,6 +30,10 @@ export function useChat(
       model: saved.model,
     })
     store.getState().setCurrentModel(saved.model)
+
+    // 同步音效设置
+    audioManager.setEnabled(saved.soundEnabled)
+    audioManager.setVolume(saved.soundVolume)
   }, [store])
 
   // ---- 监听托盘事件（打开设置） ----
@@ -71,6 +75,7 @@ export function useChat(
       })
       getStateMachine().setMood('happy')
       getParticleSystem().emit('heart', PET_CENTER_X, PET_CENTER_Y - 20, 3)
+      audioManager.play('greet')
     } catch {
       getStateMachine().setMood('bored')
     }
@@ -88,6 +93,10 @@ export function useChat(
   const handleSettingsChange = useCallback((settings: PetSettings) => {
     const s = store.getState()
     s.setCurrentModel(settings.model)
+
+    // 同步音效设置
+    audioManager.setEnabled(settings.soundEnabled)
+    audioManager.setVolume(settings.soundVolume)
 
     // 切换皮肤 → 重新生成精灵图
     const theme = getThemeBySkin((settings.skin || 'lumie') as SkinId)

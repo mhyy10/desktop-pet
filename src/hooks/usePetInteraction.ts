@@ -1,9 +1,9 @@
 import { useRef, useCallback } from 'react'
 import { usePetStore } from '../store/petStore'
-import type { StateMachine, ParticleSystem, SpringPhysics2D } from '../pet'
+import { audioManager, type StateMachine, type ParticleSystem, type SpringPhysics2D } from '../pet'
 
 // ============================================
-// 宠物交互 Hook — 拖拽(惯性) + 点击 + 边缘检测
+// 宠物交互 Hook — 拖拽(惯性) + 点击 + 双击 + 长按 + 音效
 // ============================================
 
 const isTauri = !!window.__TAURI_INTERNALS__
@@ -20,6 +20,15 @@ try {
 
 /** 速度采样窗口大小 */
 const VELOCITY_SAMPLES = 5
+
+/** 双击间隔阈值（ms） */
+const DOUBLE_CLICK_THRESHOLD = 300
+
+/** 长按阈值（ms） */
+const LONG_PRESS_THRESHOLD = 500
+
+/** 长按移动容差（px） */
+const LONG_PRESS_MOVE_TOLERANCE = 5
 
 interface UsePetInteractionOptions {
   canvasRef: React.RefObject<HTMLCanvasElement | null>
@@ -44,16 +53,70 @@ export function usePetInteraction({
   // 速度采样（用于计算惯性抛出速度）
   const velocitySamplesRef = useRef<Array<{ x: number; y: number; t: number }>>([])
 
+  // 双击检测
+  const lastClickTimeRef = useRef(0)
+
+  // 长按检测
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const longPressFiredRef = useRef(false)
+  const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null)
+
   const store = usePetStore
 
-  // ---- 点击宠物 ----
-  const handlePetClick = useCallback(() => {
-    if (hasMovedRef.current) return
+  // ---- 清理长按定时器 ----
+  const clearLongPressTimer = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
+    }
+  }, [])
+
+  // ---- 长按触发 ----
+  const handleLongPress = useCallback(() => {
+    longPressFiredRef.current = true
     const s = store.getState()
     s.updateInteraction()
-    getStateMachine().setMood('happy')
-    getParticleSystem().emit('sparkle', PET_CENTER_X, PET_CENTER_Y - 20, 6)
-    s.setChatOpen(true)
+    getStateMachine().setMood('shy')
+    getParticleSystem().emit('sparkle', PET_CENTER_X, PET_CENTER_Y - 20, 5, { size: 0.6 })
+    audioManager.play('long_press')
+
+    // 弹出长按气泡
+    s.addMessage({
+      id: crypto.randomUUID(),
+      role: 'pet',
+      content: '别戳我啦… 🥺',
+      timestamp: Date.now(),
+    })
+  }, [PET_CENTER_X, PET_CENTER_Y, store, getStateMachine, getParticleSystem])
+
+  // ---- 点击宠物（含双击检测） ----
+  const handlePetClick = useCallback(() => {
+    if (hasMovedRef.current || longPressFiredRef.current) return
+
+    const now = Date.now()
+    const timeSinceLastClick = now - lastClickTimeRef.current
+    lastClickTimeRef.current = now
+
+    const s = store.getState()
+    s.updateInteraction()
+
+    // 初始化 AudioContext（需要用户交互触发）
+    audioManager.init()
+
+    if (timeSinceLastClick < DOUBLE_CLICK_THRESHOLD) {
+      // ---- 双击 ----
+      lastClickTimeRef.current = 0 // 重置，防止三击
+      getStateMachine().setMood('excited')
+      getParticleSystem().emit('heart', PET_CENTER_X, PET_CENTER_Y - 20, 8)
+      audioManager.play('double_click')
+      s.setAction('play')
+    } else {
+      // ---- 单击 ----
+      getStateMachine().setMood('happy')
+      getParticleSystem().emit('sparkle', PET_CENTER_X, PET_CENTER_Y - 20, 6)
+      audioManager.play('click')
+      s.setChatOpen(true)
+    }
   }, [PET_CENTER_X, PET_CENTER_Y, store, getStateMachine, getParticleSystem])
 
   // ---- 拖拽 ----
@@ -61,19 +124,39 @@ export function usePetInteraction({
     if (e.button !== 0) return
     isDragTrackingRef.current = true
     hasMovedRef.current = false
+    longPressFiredRef.current = false
     dragStartRef.current = { x: e.clientX, y: e.clientY }
+    mouseDownPosRef.current = { x: e.clientX, y: e.clientY }
     velocitySamplesRef.current = [{ x: e.clientX, y: e.clientY, t: Date.now() }]
 
     // 停止之前的惯性
     getPhysics().stopFling()
 
+    // 启动长按检测
+    clearLongPressTimer()
+    longPressTimerRef.current = setTimeout(() => {
+      // 检查是否没移动过
+      if (!hasMovedRef.current) {
+        handleLongPress()
+      }
+    }, LONG_PRESS_THRESHOLD)
+
     if (isTauri && tauriWindow) {
       tauriWindow.getCurrentWindow().startDragging().catch(() => {})
       store.getState().setDragging(true)
     }
-  }, [store, getPhysics])
+  }, [store, getPhysics, clearLongPressTimer, handleLongPress])
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    // 检测是否超出长按移动容差
+    if (mouseDownPosRef.current && !hasMovedRef.current) {
+      const dx = Math.abs(e.clientX - mouseDownPosRef.current.x)
+      const dy = Math.abs(e.clientY - mouseDownPosRef.current.y)
+      if (dx > LONG_PRESS_MOVE_TOLERANCE || dy > LONG_PRESS_MOVE_TOLERANCE) {
+        clearLongPressTimer()
+      }
+    }
+
     if (!isDragTrackingRef.current || isTauri) return
 
     const dx = e.clientX - (dragStartRef.current?.x ?? 0)
@@ -89,13 +172,17 @@ export function usePetInteraction({
       const s = store.getState()
       if (!s.isDragging) {
         s.setDragging(true)
+        audioManager.play('drag')
       }
       hasMovedRef.current = true
+      clearLongPressTimer()
       getPhysics().stretch(PET_CENTER_X + dx, PET_CENTER_Y + dy)
     }
-  }, [PET_CENTER_X, PET_CENTER_Y, store, getPhysics])
+  }, [PET_CENTER_X, PET_CENTER_Y, store, getPhysics, clearLongPressTimer])
 
   const handleMouseUp = useCallback(() => {
+    clearLongPressTimer()
+
     const s = store.getState()
     if (s.isDragging) {
       if (!isTauri) {
@@ -105,7 +192,8 @@ export function usePetInteraction({
 
         // 如果有足够的速度就惯性抛出，否则回弹
         if (Math.abs(vx) > 1 || Math.abs(vy) > 1) {
-          getPhysics().fling(vx * 1.5, vy * 1.5) // 乘以系数让滑动更明显
+          getPhysics().fling(vx * 1.5, vy * 1.5)
+          audioManager.play('bounce')
         } else {
           getPhysics().setTarget(PET_CENTER_X, PET_CENTER_Y)
         }
@@ -115,8 +203,9 @@ export function usePetInteraction({
     }
     isDragTrackingRef.current = false
     dragStartRef.current = null
+    mouseDownPosRef.current = null
     velocitySamplesRef.current = []
-  }, [PET_CENTER_X, PET_CENTER_Y, store, getPhysics, getParticleSystem])
+  }, [PET_CENTER_X, PET_CENTER_Y, store, getPhysics, getParticleSystem, clearLongPressTimer])
 
   // ---- 绑定到 canvas 的事件 props ----
   const canvasEventProps = {
