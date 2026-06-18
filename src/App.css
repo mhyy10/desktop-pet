@@ -35,7 +35,7 @@ html, body, #root {
 /* ---- Canvas ---- */
 
 .pet-canvas {
-  cursor: grab;
+  cursor: default;
   transition: filter 0.15s;
 }
 

@@ -4,6 +4,11 @@ import { audioManager, type StateMachine, type ParticleSystem, type SpringPhysic
 
 // ============================================
 // 宠物交互 Hook — 拖拽(惯性) + 点击 + 双击 + 长按 + 音效
+//
+// 关键设计：
+// - mousedown 只记录起点，不立即拖拽
+// - mousemove 超过 DRAG_THRESHOLD 才开始拖拽（Tauri 调 startDragging）
+// - 这样 click/dblclick 事件不会被吞掉
 // ============================================
 
 const isTauri = !!window.__TAURI_INTERNALS__
@@ -22,13 +27,16 @@ try {
 const VELOCITY_SAMPLES = 5
 
 /** 双击间隔阈值（ms） */
-const DOUBLE_CLICK_THRESHOLD = 300
+const DOUBLE_CLICK_THRESHOLD = 350
 
 /** 长按阈值（ms） */
 const LONG_PRESS_THRESHOLD = 500
 
 /** 长按移动容差（px） */
 const LONG_PRESS_MOVE_TOLERANCE = 5
+
+/** 拖拽触发阈值（px）— 移动超过此距离才算拖拽 */
+const DRAG_THRESHOLD = 5
 
 interface UsePetInteractionOptions {
   canvasRef: React.RefObject<HTMLCanvasElement | null>
@@ -49,6 +57,8 @@ export function usePetInteraction({
   const isDragTrackingRef = useRef(false)
   const dragStartRef = useRef<{ x: number; y: number } | null>(null)
   const hasMovedRef = useRef(false)
+  /** 是否已经真正进入拖拽模式（超过阈值） */
+  const isDraggingActiveRef = useRef(false)
 
   // 速度采样（用于计算惯性抛出速度）
   const velocitySamplesRef = useRef<Array<{ x: number; y: number; t: number }>>([])
@@ -80,7 +90,6 @@ export function usePetInteraction({
     getParticleSystem().emit('sparkle', PET_CENTER_X, PET_CENTER_Y - 20, 5, { size: 0.6 })
     audioManager.play('long_press')
 
-    // 弹出长按气泡
     s.addMessage({
       id: crypto.randomUUID(),
       role: 'pet',
@@ -91,6 +100,7 @@ export function usePetInteraction({
 
   // ---- 点击宠物（含双击检测） ----
   const handlePetClick = useCallback(() => {
+    // 只有没移动过且没触发长按，才算有效点击
     if (hasMovedRef.current || longPressFiredRef.current) return
 
     const now = Date.now()
@@ -119,11 +129,13 @@ export function usePetInteraction({
     }
   }, [PET_CENTER_X, PET_CENTER_Y, store, getStateMachine, getParticleSystem])
 
-  // ---- 拖拽 ----
+  // ---- mousedown：只记录起点，不立即拖拽 ----
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button !== 0) return
+
     isDragTrackingRef.current = true
     hasMovedRef.current = false
+    isDraggingActiveRef.current = false
     longPressFiredRef.current = false
     dragStartRef.current = { x: e.clientX, y: e.clientY }
     mouseDownPosRef.current = { x: e.clientX, y: e.clientY }
@@ -135,62 +147,68 @@ export function usePetInteraction({
     // 启动长按检测
     clearLongPressTimer()
     longPressTimerRef.current = setTimeout(() => {
-      // 检查是否没移动过
       if (!hasMovedRef.current) {
         handleLongPress()
       }
     }, LONG_PRESS_THRESHOLD)
+  }, [getPhysics, clearLongPressTimer, handleLongPress])
 
-    if (isTauri && tauriWindow) {
-      tauriWindow.getCurrentWindow().startDragging().catch(() => {})
-      store.getState().setDragging(true)
-    }
-  }, [store, getPhysics, clearLongPressTimer, handleLongPress])
-
+  // ---- mousemove：超过阈值才真正开始拖拽 ----
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isDragTrackingRef.current) return
+
+    const dx = e.clientX - (dragStartRef.current?.x ?? 0)
+    const dy = e.clientY - (dragStartRef.current?.y ?? 0)
+    const moveDistance = Math.sqrt(dx * dx + dy * dy)
+
     // 检测是否超出长按移动容差
     if (mouseDownPosRef.current && !hasMovedRef.current) {
-      const dx = Math.abs(e.clientX - mouseDownPosRef.current.x)
-      const dy = Math.abs(e.clientY - mouseDownPosRef.current.y)
-      if (dx > LONG_PRESS_MOVE_TOLERANCE || dy > LONG_PRESS_MOVE_TOLERANCE) {
+      const ldx = Math.abs(e.clientX - mouseDownPosRef.current.x)
+      const ldy = Math.abs(e.clientY - mouseDownPosRef.current.y)
+      if (ldx > LONG_PRESS_MOVE_TOLERANCE || ldy > LONG_PRESS_MOVE_TOLERANCE) {
         clearLongPressTimer()
       }
     }
 
-    if (!isDragTrackingRef.current || isTauri) return
-
-    const dx = e.clientX - (dragStartRef.current?.x ?? 0)
-    const dy = e.clientY - (dragStartRef.current?.y ?? 0)
-
-    // 记录速度采样
-    velocitySamplesRef.current.push({ x: e.clientX, y: e.clientY, t: Date.now() })
-    if (velocitySamplesRef.current.length > VELOCITY_SAMPLES) {
-      velocitySamplesRef.current.shift()
-    }
-
-    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
-      const s = store.getState()
-      if (!s.isDragging) {
-        s.setDragging(true)
-        audioManager.play('drag')
-      }
+    // 超过拖拽阈值 → 进入拖拽模式
+    if (moveDistance > DRAG_THRESHOLD && !isDraggingActiveRef.current) {
+      isDraggingActiveRef.current = true
       hasMovedRef.current = true
       clearLongPressTimer()
+      store.getState().setDragging(true)
+
+      // Tauri：延迟调用 startDragging，只在真正拖拽时才触发
+      if (isTauri && tauriWindow) {
+        tauriWindow.getCurrentWindow().startDragging().catch(() => {})
+      } else {
+        // 浏览器模式：播放拖拽音效
+        audioManager.play('drag')
+      }
+    }
+
+    // 非拖拽模式或 Tauri 模式下不手动更新位置（Tauri 的 startDragging 接管了窗口移动）
+    if (isDraggingActiveRef.current && !isTauri) {
+      // 记录速度采样
+      velocitySamplesRef.current.push({ x: e.clientX, y: e.clientY, t: Date.now() })
+      if (velocitySamplesRef.current.length > VELOCITY_SAMPLES) {
+        velocitySamplesRef.current.shift()
+      }
+
       getPhysics().stretch(PET_CENTER_X + dx, PET_CENTER_Y + dy)
     }
   }, [PET_CENTER_X, PET_CENTER_Y, store, getPhysics, clearLongPressTimer])
 
+  // ---- mouseup：结束拖拽 ----
   const handleMouseUp = useCallback(() => {
     clearLongPressTimer()
 
     const s = store.getState()
-    if (s.isDragging) {
+    if (isDraggingActiveRef.current) {
       if (!isTauri) {
         // 计算惯性抛出速度
         const vx = computeFlingVelocity(velocitySamplesRef.current, 'x')
         const vy = computeFlingVelocity(velocitySamplesRef.current, 'y')
 
-        // 如果有足够的速度就惯性抛出，否则回弹
         if (Math.abs(vx) > 1 || Math.abs(vy) > 1) {
           getPhysics().fling(vx * 1.5, vy * 1.5)
           audioManager.play('bounce')
@@ -201,7 +219,9 @@ export function usePetInteraction({
       getParticleSystem().emit('star', PET_CENTER_X, PET_CENTER_Y, 4)
       s.setDragging(false)
     }
+
     isDragTrackingRef.current = false
+    isDraggingActiveRef.current = false
     dragStartRef.current = null
     mouseDownPosRef.current = null
     velocitySamplesRef.current = []
@@ -232,7 +252,6 @@ function computeFlingVelocity(
 ): number {
   if (samples.length < 2) return 0
 
-  // 取最近的几个采样点计算平均速度
   const recent = samples.slice(-3)
   const first = recent[0]
   const last = recent[recent.length - 1]
@@ -240,8 +259,7 @@ function computeFlingVelocity(
 
   if (dt === 0) return 0
 
-  const dx = (last[axis] - first[axis]) / (dt / 16.67) // 归一化到每帧（~16.67ms）
+  const dx = (last[axis] - first[axis]) / (dt / 16.67)
 
-  // 限制最大速度，防止飞出屏幕
   return Math.max(-20, Math.min(20, dx))
 }
