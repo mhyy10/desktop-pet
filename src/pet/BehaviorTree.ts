@@ -112,6 +112,14 @@ class ConditionNode implements BehaviorNode {
   }
 }
 
+// ---- 辅助函数 ----
+
+/** 判断宠物是否靠近 Canvas 边缘 */
+function isNearEdge(state: PetState, threshold = 40): boolean {
+  const { x, y } = state.position
+  return x < threshold || x > 260 || y < threshold || y > 310
+}
+
 // ---- 行为树 ----
 
 export class BehaviorTree {
@@ -132,12 +140,17 @@ export class BehaviorTree {
         new ConditionNode((s) => s.isChatOpen),
         new ActionNode('think', 200),
       ]),
-      // 分支3：闲置很久 → 打盹
+      // 分支3：靠近边缘 → 停下来站好（防止走出屏幕）
+      new SequenceNode([
+        new ConditionNode((s) => isNearEdge(s)),
+        new ActionNode('idle_stand', 2000),
+      ]),
+      // 分支4：闲置很久 → 打盹
       new SequenceNode([
         new ConditionNode((s) => Date.now() - s.lastInteractionTime > 300_000),
         new ActionNode('sleep', 5000),
       ]),
-      // 分支4：闲置一会 → 走来走去
+      // 分支5：闲置一会 → 走来走去
       new SequenceNode([
         new ConditionNode((s) => Date.now() - s.lastInteractionTime > 30_000),
         new ActionNode('walk_right', 2000),

@@ -22,6 +22,21 @@ fn move_pet(window: tauri::Window, x: i32, y: i32) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+/// 获取主屏幕尺寸
+#[tauri::command]
+fn get_screen_size(window: tauri::Window) -> Result<(u32, u32), String> {
+    let monitor = window.primary_monitor().map_err(|e| e.to_string())?;
+    let size = monitor.map(|m| m.size()).unwrap_or(tauri::PhysicalSize::new(1920, 1080));
+    Ok((size.width, size.height))
+}
+
+/// 获取窗口尺寸
+#[tauri::command]
+fn get_window_size(window: tauri::Window) -> Result<(u32, u32), String> {
+    let size = window.inner_size().map_err(|e| e.to_string())?;
+    Ok((size.width, size.height))
+}
+
 /// 开始拖拽窗口（调用 Tauri 内置拖拽，操作系统原生体验）
 #[tauri::command]
 async fn start_drag(window: tauri::Window) -> Result<(), String> {
@@ -60,6 +75,8 @@ pub fn run() {
             greet,
             get_pet_position,
             move_pet,
+            get_screen_size,
+            get_window_size,
             start_drag,
             show_window,
             hide_window,

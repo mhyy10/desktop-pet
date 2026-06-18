@@ -12,13 +12,19 @@ import { usePetStore } from '../store/petStore'
 
 // ============================================
 // 宠物渲染 Hook — Canvas 生命周期 + 渲染循环
-// 从 App.tsx 提取
+// 含边界碰撞检测
 // ============================================
 
 const CANVAS_W = 300
 const CANVAS_H = 350
 const PET_CENTER_X = CANVAS_W / 2
 const PET_CENTER_Y = CANVAS_H / 2 + 20
+
+/** 宠物可移动范围（Canvas 内坐标） */
+const PET_MIN_X = 30
+const PET_MAX_X = CANVAS_W - 30
+const PET_MIN_Y = 30
+const PET_MAX_Y = CANVAS_H - 20
 
 export function usePetRenderer() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -31,6 +37,9 @@ export function usePetRenderer() {
   const behaviorTreeRef = useRef(new BehaviorTree())
   const particleSystemRef = useRef(new ParticleSystem())
   const physicsRef = useRef(new SpringPhysics2D(PET_CENTER_X, PET_CENTER_Y))
+
+  // 边缘碰撞状态
+  const lastBounceRef = useRef<{ x: 'none' | 'min' | 'max' | 'both'; y: 'none' | 'min' | 'max' | 'both' }>({ x: 'none', y: 'none' })
 
   const { setReady, setMood, setAction, addMessage, isReady } = usePetStore()
 
@@ -94,7 +103,31 @@ export function usePetRenderer() {
 
       ctx.clearRect(0, 0, CANVAS_W, CANVAS_H)
 
+      // 更新物理
       const pos = physics.update()
+
+      // 边界碰撞检测（惯性滑动时）
+      if (physics.isSliding) {
+        const bounce = physics.bounce(PET_MIN_X, PET_MAX_X, PET_MIN_Y, PET_MAX_Y, 0.4)
+
+        // 碰壁时发射粒子
+        if (bounce.x !== 'none' && lastBounceRef.current.x === 'none') {
+          particles.emit('sparkle', pos.x, pos.y, 4, { spread: 20 })
+          sm.setMood('surprised')
+        }
+        if (bounce.y !== 'none' && lastBounceRef.current.y === 'none') {
+          particles.emit('sparkle', pos.x, pos.y, 4, { spread: 20 })
+        }
+        lastBounceRef.current = bounce
+
+        // 惯性结束后回弹到中心
+        if (!physics.isSliding) {
+          physics.setTarget(PET_CENTER_X, PET_CENTER_Y)
+          sm.setMood('happy')
+        }
+      } else {
+        lastBounceRef.current = { x: 'none', y: 'none' }
+      }
 
       // 构建 PetState 供行为树和状态机使用
       const petState = {
@@ -124,7 +157,7 @@ export function usePetRenderer() {
 
     animFrameRef.current = requestAnimationFrame(loop)
     return () => cancelAnimationFrame(animFrameRef.current)
-  }, [isReady, setAction])
+  }, [isReady, setAction, setMood])
 
   // ---- 打盹粒子 ----
   useEffect(() => {
