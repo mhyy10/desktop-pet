@@ -25,9 +25,9 @@ fn move_pet(window: tauri::Window, x: i32, y: i32) -> Result<(), String> {
 /// 获取主屏幕尺寸
 #[tauri::command]
 fn get_screen_size(window: tauri::Window) -> Result<(u32, u32), String> {
-    let monitor = window.primary_monitor().map_err(|e| e.to_string())?;
-    let size = monitor.map(|m| m.size()).unwrap_or(tauri::PhysicalSize::new(1920, 1080));
-    Ok((size.width, size.height))
+    let monitors = window.primary_monitor().map_err(|e| e.to_string())?;
+    let (w, h) = monitors.map(|m| (m.size().width, m.size().height)).unwrap_or((1920, 1080));
+    Ok((w, h))
 }
 
 /// 获取窗口尺寸
