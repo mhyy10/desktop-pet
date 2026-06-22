@@ -4,19 +4,21 @@ import {
   BehaviorTree,
   ParticleSystem,
   SpringPhysics2D,
+  OffscreenLayer,
   getThemeBySkin,
   createRenderer,
   type IRenderer,
   type SkinId,
   type RendererType,
+  type PetMood,
+  type PetAction,
 } from '../pet'
 import { loadSettings } from '../utils/storage'
 import { usePetStore } from '../store/petStore'
 
 // ============================================
 // 宠物渲染 Hook — Canvas 生命周期 + 渲染循环
-// 含边界碰撞检测
-// 使用 IRenderer 接口 + 工厂创建
+// 含边界碰撞检测 + 离屏缓存
 // ============================================
 
 const CANVAS_W = 300
@@ -33,8 +35,13 @@ const PET_MAX_Y = CANVAS_H - 20
 export function usePetRenderer() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const rendererRef = useRef<IRenderer | null>(null)
+  const offscreenRef = useRef<OffscreenLayer | null>(null)
   const animFrameRef = useRef(0)
   const lastTimeRef = useRef(performance.now())
+
+  // 上一帧的状态，用于脏标记检测
+  const prevMoodRef = useRef<PetMood | null>(null)
+  const prevActionRef = useRef<PetAction | null>(null)
 
   // 核心系统实例（不需要响应式，用 ref）
   const stateMachineRef = useRef(new StateMachine())
@@ -60,8 +67,12 @@ export function usePetRenderer() {
     const saved = loadSettings()
     const theme = getThemeBySkin((saved.skin || 'lumie') as SkinId)
     const rendererType = (saved.rendererType || 'pixel') as RendererType
-    const ctx = canvas.getContext('2d')!
-    const renderer = createRenderer(rendererType, ctx, theme)
+
+    // 创建离屏缓存层
+    offscreenRef.current = new OffscreenLayer(CANVAS_W, CANVAS_H)
+
+    // 用离屏宠物层 ctx 创建渲染器
+    const renderer = createRenderer(rendererType, offscreenRef.current.petCtx, theme)
 
     renderer.init().then(() => {
       rendererRef.current = renderer
@@ -95,6 +106,7 @@ export function usePetRenderer() {
 
     const ctx = canvas.getContext('2d')!
     const renderer = rendererRef.current!
+    const offscreen = offscreenRef.current!
     const particles = particleSystemRef.current
     const physics = physicsRef.current
     const sm = stateMachineRef.current
@@ -106,8 +118,6 @@ export function usePetRenderer() {
       const delta = now - lastTimeRef.current
       lastTimeRef.current = now
 
-      ctx.clearRect(0, 0, CANVAS_W, CANVAS_H)
-
       // 更新物理
       const pos = physics.update()
 
@@ -115,7 +125,6 @@ export function usePetRenderer() {
       if (physics.isSliding) {
         const bounce = physics.bounce(PET_MIN_X, PET_MAX_X, PET_MIN_Y, PET_MAX_Y, 0.4)
 
-        // 碰壁时发射粒子
         if (bounce.x !== 'none' && lastBounceRef.current.x === 'none') {
           particles.emit('sparkle', pos.x, pos.y, 4, { spread: 20 })
           sm.setMood('surprised')
@@ -125,7 +134,6 @@ export function usePetRenderer() {
         }
         lastBounceRef.current = bounce
 
-        // 惯性结束后回弹到中心
         if (!physics.isSliding) {
           physics.setTarget(PET_CENTER_X, PET_CENTER_Y)
           sm.setMood('happy')
@@ -152,10 +160,38 @@ export function usePetRenderer() {
         sm.tick(petState)
       }
 
-      renderer.tick(delta)
-      renderer.draw(sm.mood, currentAction, pos.x, pos.y, now, 1.0)
+      const currentMood = sm.mood
+
+      // ---- 离屏缓存：宠物层只在 mood/action 变化时重绘 ----
+      if (currentMood !== prevMoodRef.current || currentAction !== prevActionRef.current) {
+        offscreen.markPetDirty()
+        prevMoodRef.current = currentMood
+        prevActionRef.current = currentAction
+      }
+
+      if (offscreen.isPetDirty) {
+        offscreen.clearPet()
+        renderer.tick(delta)
+        renderer.draw(currentMood, currentAction, pos.x, pos.y, now, 1.0)
+        offscreen.clearPetDirty()
+      } else {
+        // 宠物层没变，仍需推进动画帧
+        renderer.tick(delta)
+      }
+
+      // ---- 粒子层：有粒子就重绘 ----
       particles.update(delta)
-      particles.draw(ctx)
+      if (particles.count > 0) {
+        offscreen.clearParticle()
+        particles.draw(offscreen.particleCtx)
+        offscreen.clearParticleDirty()
+      } else if (offscreen.isParticleDirty) {
+        offscreen.clearParticle()
+        offscreen.clearParticleDirty()
+      }
+
+      // ---- 合成到主 Canvas ----
+      offscreen.composite(ctx)
 
       animFrameRef.current = requestAnimationFrame(loop)
     }
@@ -178,6 +214,7 @@ export function usePetRenderer() {
   const reinitTheme = async (theme: Parameters<IRenderer['reinit']>[0]) => {
     if (rendererRef.current) {
       await rendererRef.current.reinit(theme)
+      offscreenRef.current?.markPetDirty()
       particleSystemRef.current.emit('sparkle', PET_CENTER_X, PET_CENTER_Y - 20, 8)
     }
   }
