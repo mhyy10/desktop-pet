@@ -1,8 +1,10 @@
 import type { ChatMessage } from '../pet/types'
+import { ConversationMemory } from './ConversationMemory'
 
 // ============================================
 // AI 对话引擎
 // 支持本地模拟 + 云端 LLM 双模式
+// 集成 ConversationMemory 会话记忆
 // ============================================
 
 type ChatEngineMode = 'mock' | 'cloud'
@@ -13,6 +15,7 @@ interface ChatEngineConfig {
   baseUrl?: string
   model?: string
   systemPrompt?: string
+  petName?: string
 }
 
 /** 可用模型列表 */
@@ -27,17 +30,11 @@ export const AVAILABLE_MODELS = [
 
 export type AvailableModelId = (typeof AVAILABLE_MODELS)[number]['id']
 
-const DEFAULT_SYSTEM_PROMPT = `你是小光（Lumie），一只住在用户桌面上的 AI 小精灵。
-你的性格：温暖、好奇、偶尔调皮、靠谱。
-说话风格：温柔但不过分甜腻，偶尔来点小幽默，用中文回复。
-回复要简洁（1-3句话），因为你是在桌面气泡里聊天。
-可以适当使用 emoji 增加表现力。`
-
 export class ChatEngine {
   private config: ChatEngineConfig
   private history: ChatMessage[] = []
+  private memory: ConversationMemory
   private abortController: AbortController | null = null
-  /** 连续失败计数，超过阈值自动 fallback */
   private failCount = 0
   private static readonly MAX_FAIL = 3
 
@@ -47,13 +44,14 @@ export class ChatEngine {
       apiKey: config?.apiKey ?? 'sk-cOz4wWrca5cvaus59jR6FQ',
       baseUrl: config?.baseUrl ?? 'http://10.155.208.190:31114/aigateway/v1',
       model: config?.model ?? 'zhanlu/glm-5.1',
-      systemPrompt: config?.systemPrompt ?? DEFAULT_SYSTEM_PROMPT,
+      systemPrompt: config?.systemPrompt,
+      petName: config?.petName ?? '小光',
     }
+    this.memory = new ConversationMemory()
   }
 
   /** 发送消息，返回宠物回复 */
-  async chat(userText: string): Promise<string> {
-    // 添加用户消息到历史
+  async chat(userText: string, mood: string = 'happy'): Promise<string> {
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -61,10 +59,10 @@ export class ChatEngine {
       timestamp: Date.now(),
     }
     this.history.push(userMsg)
+    this.memory.addMessage(userMsg)
 
     let reply: string
 
-    // 连续失败过多时自动 fallback 到 mock
     const shouldUseCloud =
       this.config.mode === 'cloud' &&
       this.config.apiKey &&
@@ -72,8 +70,8 @@ export class ChatEngine {
 
     if (shouldUseCloud) {
       try {
-        reply = await this.callCloudAPI(userText)
-        this.failCount = 0 // 成功则重置
+        reply = await this.callCloudAPI(mood)
+        this.failCount = 0
       } catch {
         this.failCount++
         console.warn(`[ChatEngine] cloud fail (${this.failCount}/${ChatEngine.MAX_FAIL}), fallback to mock`)
@@ -83,7 +81,6 @@ export class ChatEngine {
       reply = await this.mockReply(userText)
     }
 
-    // 添加宠物回复到历史
     const petMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'pet',
@@ -91,6 +88,12 @@ export class ChatEngine {
       timestamp: Date.now(),
     }
     this.history.push(petMsg)
+    this.memory.addMessage(petMsg)
+
+    // 每N轮尝试生成摘要
+    if (this.memory.shouldSummarize && this.config.apiKey) {
+      this.trySummarize()
+    }
 
     return reply
   }
@@ -106,21 +109,18 @@ export class ChatEngine {
     this.history = []
   }
 
-  /** 更新配置（如切换模型） */
+  /** 更新配置 */
   updateConfig(config: Partial<ChatEngineConfig>) {
     this.config = { ...this.config, ...config }
-    // 切换到 cloud 时重置失败计数
     if (config.mode === 'cloud' || config.model) {
       this.failCount = 0
     }
   }
 
-  /** 获取当前模型名 */
   get currentModel(): string {
     return this.config.model ?? 'unknown'
   }
 
-  /** 获取当前模式 */
   get currentMode(): ChatEngineMode {
     if (this.failCount >= ChatEngine.MAX_FAIL) return 'mock'
     return this.config.mode
@@ -130,16 +130,18 @@ export class ChatEngine {
     return [...this.history]
   }
 
-  // ---- 搜索（LLM 回答，更详细） ----
+  get conversationMemory(): ConversationMemory {
+    return this.memory
+  }
 
+  // ---- 搜索 ----
   async search(query: string): Promise<string> {
     const SEARCH_PROMPT = `你是一个搜索助手。用户会提出问题，你需要给出准确、有用的回答。
 回答要条理清晰，可以用分点列举。用中文回答。控制在200字以内。`
     return this.callWithPrompt(SEARCH_PROMPT, query)
   }
 
-  // ---- 翻译（纯输出译文） ----
-
+  // ---- 翻译 ----
   async translate(text: string, direction: 'zh2en' | 'en2zh'): Promise<string> {
     const TRANSLATE_PROMPT =
       direction === 'zh2en'
@@ -148,15 +150,12 @@ export class ChatEngine {
     return this.callWithPrompt(TRANSLATE_PROMPT, text)
   }
 
-  // ---- 通用：自定义 system prompt 调用 ----
-
+  // ---- 自定义 system prompt 调用 ----
   private async callWithPrompt(systemPrompt: string, userText: string): Promise<string> {
     const shouldUseCloud =
       this.config.mode === 'cloud' && this.config.apiKey && this.failCount < ChatEngine.MAX_FAIL
 
-    if (!shouldUseCloud) {
-      return '…连接不上大脑，稍后再试 🥺'
-    }
+    if (!shouldUseCloud) return '…连接不上大脑，稍后再试 🥺'
 
     try {
       this.abortController = new AbortController()
@@ -195,15 +194,17 @@ export class ChatEngine {
     }
   }
 
-  // ---- 云端 API ----
-
-  private async callCloudAPI(_userText: string): Promise<string> {
+  // ---- 云端 API（含记忆上下文） ----
+  private async callCloudAPI(mood: string): Promise<string> {
     this.abortController = new AbortController()
 
+    const systemPrompt = this.memory.buildContextPrompt(this.config.petName ?? '小光', mood)
+    const shortTerm = this.memory.getShortTerm()
+
     const messages = [
-      { role: 'system' as const, content: this.config.systemPrompt! },
-      ...this.history.slice(-10).map((m) => ({
-        role: m.role === 'pet' ? 'assistant' : ('user' as const),
+      { role: 'system' as const, content: systemPrompt },
+      ...shortTerm.map((m) => ({
+        role: m.role === 'pet' ? ('assistant' as const) : ('user' as const),
         content: m.content,
       })),
     ]
@@ -223,7 +224,6 @@ export class ChatEngine {
       signal: this.abortController.signal,
     })
 
-    // 状态码检查
     if (!response.ok) {
       const body = await response.text().catch(() => '')
       throw new Error(`API ${response.status}: ${body.slice(0, 120)}`)
@@ -236,55 +236,70 @@ export class ChatEngine {
     return content
   }
 
+  // ---- 异步摘要生成（不阻塞主流程） ----
+  private async trySummarize(): Promise<void> {
+    try {
+      const recent = this.memory.getShortTerm()
+      const text = recent.map((m) => `${m.role === 'user' ? '用户' : '宠物'}: ${m.content}`).join('\n')
+      const summaryPrompt = `请总结以下对话的关键内容（50字以内），并提取关于用户的关键事实（如偏好、名字、重要事件），每条事实一行。
+格式：
+摘要：...
+事实：
+- 事实1
+- 事实2
+
+对话内容：
+${text}`
+
+      const response = await fetch(`${this.config.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.config.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: this.config.model,
+          messages: [{ role: 'user', content: summaryPrompt }],
+          max_tokens: 200,
+          temperature: 0.3,
+        }),
+      })
+
+      if (!response.ok) return
+      const data = await response.json()
+      const content: string = data.choices?.[0]?.message?.content
+      if (!content) return
+
+      const summaryMatch = content.match(/摘要[：:]\s*(.+)/)
+      const factsMatch = content.match(/事实[：:]\s*\n([\s\S]*?)$/)
+      const summary = summaryMatch?.[1]?.trim() ?? ''
+      const facts = (factsMatch?.[1] ?? '').split('\n').map((l) => l.replace(/^-\s*/, '').trim()).filter(Boolean)
+
+      if (summary || facts.length > 0) {
+        this.memory.updateSummary(summary, facts)
+      }
+    } catch {
+      // 摘要失败不影响主流程
+    }
+  }
+
   // ---- 本地模拟回复 ----
-
   private async mockReply(userText: string): Promise<string> {
-    // 模拟思考延迟
     await new Promise((r) => setTimeout(r, 500 + Math.random() * 500))
-
     const text = userText.toLowerCase()
 
-    // 简单关键词匹配
-    if (/你好|嗨|hi|hello|hey/.test(text)) {
-      return pick(['你好呀～ ✨', '嗨嗨！', '嘿嘿，你来啦～'])
-    }
-    if (/天气|weather/.test(text)) {
-      return '外面天气不错呢～记得看一眼窗外 ☀️'
-    }
-    if (/吃|饿|饭|lunch|dinner|hungry/.test(text)) {
-      return pick(['要不要吃点东西？', '我也好饿…虽然我不用吃饭 😋', '该补充能量啦！'])
-    }
-    if (/累|困|睡|休息|tired|sleep/.test(text)) {
-      return pick(['辛苦了，休息一下吧 🌙', '要不要趴一会儿？我帮你守着～', '早点休息呀～'])
-    }
-    if (/谢谢|thanks|thank you/.test(text)) {
-      return pick(['不客气～ 💜', '嘿嘿，随时找我呀 ✨', '能帮到你就好！'])
-    }
-    if (/再见|拜拜|bye/.test(text)) {
-      return pick(['拜拜～下次见！ 👋', '去忙吧，我在这等你～', '下次再来找我玩呀 💜'])
-    }
-    if (/你是谁|你叫什么|who are you/.test(text)) {
-      return '我是小光！一只住在桌面上的小精灵 ✨ 很高兴认识你～'
-    }
-    if (/帮我|help|帮忙/.test(text)) {
-      return pick(['好的！说说看需要什么帮助～', '来啦来啦！💪', '尽管说～'])
-    }
-    if (/无聊|boring/.test(text)) {
-      return pick(['跟我聊天就不无聊啦～', '要不要玩个小游戏？🎲', '我给你讲个笑话？'])
-    }
-    if (/开[心心]|高兴|happy/.test(text)) {
-      return pick(['开心就好！✨', '你开心我也开心～ 💜', '耶！好心情要保持！'])
-    }
+    if (/你好|嗨|hi|hello|hey/.test(text)) return pick(['你好呀～ ✨', '嗨嗨！', '嘿嘿，你来啦～'])
+    if (/天气|weather/.test(text)) return '外面天气不错呢～记得看一眼窗外 ☀️'
+    if (/吃|饿|饭|lunch|dinner|hungry/.test(text)) return pick(['要不要吃点东西？', '我也好饿…虽然我不用吃饭 😋', '该补充能量啦！'])
+    if (/累|困|睡|休息|tired|sleep/.test(text)) return pick(['辛苦了，休息一下吧 🌙', '要不要趴一会儿？我帮你守着～', '早点休息呀～'])
+    if (/谢谢|thanks|thank you/.test(text)) return pick(['不客气～ 💜', '嘿嘿，随时找我呀 ✨', '能帮到你就好！'])
+    if (/再见|拜拜|bye/.test(text)) return pick(['拜拜～下次见！ 👋', '去忙吧，我在这等你～', '下次再来找我玩呀 💜'])
+    if (/你是谁|你叫什么|who are you/.test(text)) return `我是${this.config.petName ?? '小光'}！一只住在桌面上的小精灵 ✨ 很高兴认识你～`
+    if (/帮我|help|帮忙/.test(text)) return pick(['好的！说说看需要什么帮助～', '来啦来啦！💪', '尽管说～'])
+    if (/无聊|boring/.test(text)) return pick(['跟我聊天就不无聊啦～', '要不要玩个小游戏？🎲', '我给你讲个笑话？'])
+    if (/开[心心]|高兴|happy/.test(text)) return pick(['开心就好！✨', '你开心我也开心～ 💜', '耶！好心情要保持！'])
 
-    // 通用回复
-    return pick([
-      '嗯嗯，我在听～',
-      '哦哦，这样呀 🤔',
-      '让我想想…',
-      '收到！✨',
-      '继续说～我在呢',
-      '有意思！然后呢？',
-    ])
+    return pick(['嗯嗯，我在听～', '哦哦，这样呀 🤔', '让我想想…', '收到！✨', '继续说～我在呢', '有意思！然后呢？'])
   }
 }
 
