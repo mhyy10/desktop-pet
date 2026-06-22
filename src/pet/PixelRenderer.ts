@@ -1,16 +1,18 @@
 import type { PetMood, PetAction, PetTheme } from './types'
+import type { IRenderer } from './IRenderer'
 import { SpriteGenerator, type SpriteSheet } from './SpriteGenerator'
 import { AnimationController } from './AnimationController'
 import { defaultTheme } from './theme'
 
 // ============================================
 // 像素风渲染器 — 用精灵图绘制宠物
+// 实现 IRenderer 接口
 // ============================================
 
 /** 渲染倍率：48px → 144px (3x) */
 const RENDER_SCALE = 3
 
-export class PixelRenderer {
+export class PixelRenderer implements IRenderer {
   private ctx: CanvasRenderingContext2D
   private theme: PetTheme
   private sheet: SpriteSheet | null = null

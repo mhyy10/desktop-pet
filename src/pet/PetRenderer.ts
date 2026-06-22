@@ -1,12 +1,14 @@
 import type { PetMood, PetAction, PetTheme } from './types'
+import type { IRenderer } from './IRenderer'
 import { defaultTheme } from './theme'
 
 // ============================================
 // 宠物 Canvas 渲染器
 // 绘制小光（Lumie）— 纯代码绘制，无需外部精灵图
+// 实现 IRenderer 接口
 // ============================================
 
-export class PetRenderer {
+export class PetRenderer implements IRenderer {
   private ctx: CanvasRenderingContext2D
   private theme: PetTheme
   private breathOffset = 0
@@ -15,9 +17,31 @@ export class PetRenderer {
   private bounceOffset = 0
   private walkCycle = 0
 
+  private _isReady = false
+
   constructor(ctx: CanvasRenderingContext2D, theme: PetTheme = defaultTheme) {
     this.ctx = ctx
     this.theme = theme
+    this._isReady = true
+  }
+
+  /** Canvas 渲染器无需异步初始化 */
+  async init(): Promise<void> {
+    this._isReady = true
+  }
+
+  /** 切换主题 */
+  async reinit(theme: PetTheme): Promise<void> {
+    this.theme = theme
+  }
+
+  get isReady(): boolean {
+    return this._isReady
+  }
+
+  /** Canvas 渲染器无需帧推进（动画在 draw 中计算） */
+  tick(_deltaMs: number): void {
+    // no-op
   }
 
   /** 主绘制入口 */
