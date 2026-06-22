@@ -5,6 +5,7 @@ import {
   ParticleSystem,
   SpringPhysics2D,
   OffscreenLayer,
+  FrameRateController,
   getThemeBySkin,
   createRenderer,
   type IRenderer,
@@ -18,7 +19,7 @@ import { usePetStore } from '../store/petStore'
 
 // ============================================
 // 宠物渲染 Hook — Canvas 生命周期 + 渲染循环
-// 含边界碰撞检测 + 离屏缓存
+// 离屏缓存 + 智能帧率 + 可见性检测
 // ============================================
 
 const CANVAS_W = 300
@@ -26,35 +27,33 @@ const CANVAS_H = 350
 const PET_CENTER_X = CANVAS_W / 2
 const PET_CENTER_Y = CANVAS_H / 2 + 20
 
-/** 宠物可移动范围（Canvas 内坐标） */
 const PET_MIN_X = 30
 const PET_MAX_X = CANVAS_W - 30
 const PET_MIN_Y = 30
 const PET_MAX_Y = CANVAS_H - 20
 
+/** Tauri 环境 */
+const isTauri = !!window.__TAURI_INTERNALS__
+
 export function usePetRenderer() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const rendererRef = useRef<IRenderer | null>(null)
   const offscreenRef = useRef<OffscreenLayer | null>(null)
+  const fpsRef = useRef(new FrameRateController())
   const animFrameRef = useRef(0)
   const lastTimeRef = useRef(performance.now())
 
-  // 上一帧的状态，用于脏标记检测
   const prevMoodRef = useRef<PetMood | null>(null)
   const prevActionRef = useRef<PetAction | null>(null)
 
-  // 核心系统实例（不需要响应式，用 ref）
   const stateMachineRef = useRef(new StateMachine())
   const behaviorTreeRef = useRef(new BehaviorTree())
   const particleSystemRef = useRef(new ParticleSystem())
   const physicsRef = useRef(new SpringPhysics2D(PET_CENTER_X, PET_CENTER_Y))
-
-  // 边缘碰撞状态
   const lastBounceRef = useRef<{ x: 'none' | 'min' | 'max' | 'both'; y: 'none' | 'min' | 'max' | 'both' }>({ x: 'none', y: 'none' })
 
   const { setReady, setMood, setAction, addMessage, isReady } = usePetStore()
 
-  // 暴露给其他 hooks 的引用
   const getStateMachine = () => stateMachineRef.current
   const getParticleSystem = () => particleSystemRef.current
   const getPhysics = () => physicsRef.current
@@ -68,25 +67,46 @@ export function usePetRenderer() {
     const theme = getThemeBySkin((saved.skin || 'lumie') as SkinId)
     const rendererType = (saved.rendererType || 'pixel') as RendererType
 
-    // 创建离屏缓存层
     offscreenRef.current = new OffscreenLayer(CANVAS_W, CANVAS_H)
-
-    // 用离屏宠物层 ctx 创建渲染器
     const renderer = createRenderer(rendererType, offscreenRef.current.petCtx, theme)
 
     renderer.init().then(() => {
       rendererRef.current = renderer
       setReady(true)
-
-      const greeting = stateMachineRef.current.getRandomGreeting()
       addMessage({
         id: crypto.randomUUID(),
         role: 'pet',
-        content: greeting,
+        content: stateMachineRef.current.getRandomGreeting(),
         timestamp: Date.now(),
       })
     })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ---- 可见性检测 ----
+  useEffect(() => {
+    const handleVisibility = () => {
+      fpsRef.current.setVisible(!document.hidden)
+      if (!document.hidden) fpsRef.current.reset()
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+
+    // Tauri 窗口焦点
+    let unlisten: (() => void) | null = null
+    if (isTauri) {
+      import('@tauri-apps/api/window').then(({ getCurrentWindow }) => {
+        const win = getCurrentWindow()
+        win.onFocusChanged(({ payload: focused }) => {
+          fpsRef.current.setVisible(focused)
+          if (focused) fpsRef.current.reset()
+        }).then((fn) => { unlisten = fn })
+      })
+    }
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility)
+      unlisten?.()
+    }
+  }, [])
 
   // ---- 状态机回调 ----
   useEffect(() => {
@@ -107,6 +127,7 @@ export function usePetRenderer() {
     const ctx = canvas.getContext('2d')!
     const renderer = rendererRef.current!
     const offscreen = offscreenRef.current!
+    const fps = fpsRef.current
     const particles = particleSystemRef.current
     const physics = physicsRef.current
     const sm = stateMachineRef.current
@@ -115,16 +136,28 @@ export function usePetRenderer() {
     const store = usePetStore.getState
 
     const loop = (now: number) => {
+      animFrameRef.current = requestAnimationFrame(loop)
+
+      const s = store()
+      const isDragging = s.isDragging
+      const isChatOpen = s.isChatOpen
+
+      // 智能帧率：跳过不需要渲染的帧
+      if (!fps.shouldRender(now, s.action, isDragging, isChatOpen)) {
+        // 不可见时仍需更新 lastTimeRef，避免恢复后 delta 暴涨
+        lastTimeRef.current = now
+        return
+      }
+
       const delta = now - lastTimeRef.current
       lastTimeRef.current = now
 
       // 更新物理
       const pos = physics.update()
 
-      // 边界碰撞检测（惯性滑动时）
+      // 边界碰撞检测
       if (physics.isSliding) {
         const bounce = physics.bounce(PET_MIN_X, PET_MAX_X, PET_MIN_Y, PET_MAX_Y, 0.4)
-
         if (bounce.x !== 'none' && lastBounceRef.current.x === 'none') {
           particles.emit('sparkle', pos.x, pos.y, 4, { spread: 20 })
           sm.setMood('surprised')
@@ -133,7 +166,6 @@ export function usePetRenderer() {
           particles.emit('sparkle', pos.x, pos.y, 4, { spread: 20 })
         }
         lastBounceRef.current = bounce
-
         if (!physics.isSliding) {
           physics.setTarget(PET_CENTER_X, PET_CENTER_Y)
           sm.setMood('happy')
@@ -142,19 +174,19 @@ export function usePetRenderer() {
         lastBounceRef.current = { x: 'none', y: 'none' }
       }
 
-      // 构建 PetState 供行为树和状态机使用
+      // PetState
       const petState = {
-        mood: store().mood,
-        action: store().action,
+        mood: s.mood,
+        action: s.action,
         position: { x: pos.x, y: pos.y },
         scale: 1.0,
-        lastInteractionTime: store().lastInteractionTime,
-        isDragging: store().isDragging,
-        isChatOpen: store().isChatOpen,
+        lastInteractionTime: s.lastInteractionTime,
+        isDragging,
+        isChatOpen,
       }
 
       const currentAction = bt.tick(petState, delta)
-      store().setAction(currentAction)
+      s.setAction(currentAction)
 
       if (Math.floor(now / 1000) !== Math.floor((now - delta) / 1000)) {
         sm.tick(petState)
@@ -162,7 +194,7 @@ export function usePetRenderer() {
 
       const currentMood = sm.mood
 
-      // ---- 离屏缓存：宠物层只在 mood/action 变化时重绘 ----
+      // 离屏缓存：宠物层
       if (currentMood !== prevMoodRef.current || currentAction !== prevActionRef.current) {
         offscreen.markPetDirty()
         prevMoodRef.current = currentMood
@@ -175,11 +207,10 @@ export function usePetRenderer() {
         renderer.draw(currentMood, currentAction, pos.x, pos.y, now, 1.0)
         offscreen.clearPetDirty()
       } else {
-        // 宠物层没变，仍需推进动画帧
         renderer.tick(delta)
       }
 
-      // ---- 粒子层：有粒子就重绘 ----
+      // 离屏缓存：粒子层
       particles.update(delta)
       if (particles.count > 0) {
         offscreen.clearParticle()
@@ -190,10 +221,8 @@ export function usePetRenderer() {
         offscreen.clearParticleDirty()
       }
 
-      // ---- 合成到主 Canvas ----
+      // 合成
       offscreen.composite(ctx)
-
-      animFrameRef.current = requestAnimationFrame(loop)
     }
 
     animFrameRef.current = requestAnimationFrame(loop)
@@ -210,7 +239,6 @@ export function usePetRenderer() {
     return () => clearInterval(interval)
   }, [])
 
-  /** 切换皮肤后重新初始化渲染器 */
   const reinitTheme = async (theme: Parameters<IRenderer['reinit']>[0]) => {
     if (rendererRef.current) {
       await rendererRef.current.reinit(theme)
@@ -220,14 +248,7 @@ export function usePetRenderer() {
   }
 
   return {
-    canvasRef,
-    CANVAS_W,
-    CANVAS_H,
-    PET_CENTER_X,
-    PET_CENTER_Y,
-    reinitTheme,
-    getStateMachine,
-    getParticleSystem,
-    getPhysics,
+    canvasRef, CANVAS_W, CANVAS_H, PET_CENTER_X, PET_CENTER_Y,
+    reinitTheme, getStateMachine, getParticleSystem, getPhysics,
   }
 }
