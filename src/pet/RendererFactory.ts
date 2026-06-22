@@ -10,11 +10,12 @@ import { PetRenderer } from './PetRenderer'
 export function createRenderer(
   type: RendererType,
   ctx: CanvasRenderingContext2D,
-  theme: PetTheme
+  theme: PetTheme,
+  skinId: string = 'lumie'
 ): IRenderer {
   switch (type) {
     case 'pixel':
-      return new PixelRenderer(ctx, theme)
+      return new PixelRenderer(ctx, theme, skinId)
     case 'canvas':
       return new PetRenderer(ctx, theme)
   }

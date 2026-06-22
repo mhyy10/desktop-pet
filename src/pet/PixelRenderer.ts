@@ -1,12 +1,13 @@
 import type { PetMood, PetAction, PetTheme } from './types'
 import type { IRenderer } from './IRenderer'
-import { SpriteGenerator, type SpriteSheet } from './SpriteGenerator'
+import type { SpriteSheet } from './SpriteGenerator'
 import { AnimationController } from './AnimationController'
+import { generateSheetWithCache } from './SpriteCache'
 import { defaultTheme } from './theme'
 
 // ============================================
 // 像素风渲染器 — 用精灵图绘制宠物
-// 实现 IRenderer 接口
+// 实现 IRenderer 接口，使用 IndexedDB 缓存
 // ============================================
 
 /** 渲染倍率：48px → 144px (3x) */
@@ -15,19 +16,20 @@ const RENDER_SCALE = 3
 export class PixelRenderer implements IRenderer {
   private ctx: CanvasRenderingContext2D
   private theme: PetTheme
+  private skinId: string
   private sheet: SpriteSheet | null = null
   private animController: AnimationController | null = null
   private _isReady = false
 
-  constructor(ctx: CanvasRenderingContext2D, theme: PetTheme = defaultTheme) {
+  constructor(ctx: CanvasRenderingContext2D, theme: PetTheme = defaultTheme, skinId: string = 'lumie') {
     this.ctx = ctx
     this.theme = theme
+    this.skinId = skinId
   }
 
-  /** 异步初始化：生成精灵图 */
+  /** 异步初始化：生成精灵图（优先使用缓存） */
   async init(): Promise<void> {
-    const generator = new SpriteGenerator(this.theme)
-    this.sheet = generator.generate()
+    this.sheet = await generateSheetWithCache(this.skinId, this.theme)
     this.animController = new AnimationController(this.sheet.animations)
     this._isReady = true
   }
@@ -37,6 +39,11 @@ export class PixelRenderer implements IRenderer {
     this.theme = newTheme
     this._isReady = false
     await this.init()
+  }
+
+  /** 更新皮肤ID（用于缓存 key） */
+  setSkinId(skinId: string): void {
+    this.skinId = skinId
   }
 
   get isReady(): boolean {
@@ -55,11 +62,8 @@ export class PixelRenderer implements IRenderer {
     if (!this.sheet || !this.animController) return
 
     const ctx = this.ctx
-
-    // 切换动画
     this.animController.play(action)
 
-    // 注意：tick 在主循环中由 App.tsx 调用，这里只做绘制
     const frameIndex = this.animController.currentFrame
     const rects = this.sheet.frameRects.get(action)
     if (!rects || frameIndex >= rects.length) return
@@ -68,30 +72,19 @@ export class PixelRenderer implements IRenderer {
     const { w, h } = this.sheet.frameSize
 
     ctx.save()
-
-    // 移动到宠物中心位置
     ctx.translate(centerX, centerY)
     ctx.scale(scale * RENDER_SCALE, scale * RENDER_SCALE)
-
-    // 禁用平滑，保持像素锐利
     ctx.imageSmoothingEnabled = false
 
-    // 绘制发光效果
     this.drawGlow(ctx, mood, timeMs)
 
-    // 从 Sprite Sheet 裁剪绘制当前帧
     const sx = rect.col * w
     const sy = rect.row * h
     const drawX = -w / 2
-    const drawY = -h / 2 + 5 // 稍微下移让宠物居中
+    const drawY = -h / 2 + 5
 
-    ctx.drawImage(
-      this.sheet.canvas,
-      sx, sy, w, h,
-      drawX, drawY, w, h
-    )
+    ctx.drawImage(this.sheet.canvas, sx, sy, w, h, drawX, drawY, w, h)
 
-    // 开心/兴奋时额外光圈
     if (mood === 'happy' || mood === 'excited') {
       this.drawAura(ctx, timeMs)
     }
@@ -99,13 +92,12 @@ export class PixelRenderer implements IRenderer {
     ctx.restore()
   }
 
-  /** 更新动画控制器（在主循环 tick 中调用） */
+  /** 更新动画控制器 */
   tick(deltaMs: number): { frameIndex: number; action: PetAction } {
     if (!this.animController) return { frameIndex: 0, action: 'idle_stand' }
     return this.animController.tick(deltaMs)
   }
 
-  /** 绘制发光效果 */
   private drawGlow(ctx: CanvasRenderingContext2D, _mood: PetMood, timeMs: number) {
     const [r, g, b] = hexToRgb(this.theme.glowColor)
     const pulse = 0.3 + Math.sin(timeMs * 0.002) * 0.1
@@ -121,7 +113,6 @@ export class PixelRenderer implements IRenderer {
     ctx.restore()
   }
 
-  /** 绘制光环粒子 */
   private drawAura(ctx: CanvasRenderingContext2D, timeMs: number) {
     const [r, g, b] = hexToRgb(this.theme.warm)
     const count = 4
@@ -134,14 +125,11 @@ export class PixelRenderer implements IRenderer {
       ctx.save()
       ctx.globalAlpha = 0.6
       ctx.fillStyle = `rgba(${r},${g},${b},0.8)`
-      // 像素风方块粒子
       ctx.fillRect(Math.round(px) - 1, Math.round(py) - 1, 2, 2)
       ctx.restore()
     }
   }
 }
-
-// ---- 工具函数 ----
 
 function hexToRgb(hex: string): [number, number, number] {
   const h = hex.replace('#', '')

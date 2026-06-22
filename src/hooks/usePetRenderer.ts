@@ -68,7 +68,7 @@ export function usePetRenderer() {
     const rendererType = (saved.rendererType || 'pixel') as RendererType
 
     offscreenRef.current = new OffscreenLayer(CANVAS_W, CANVAS_H)
-    const renderer = createRenderer(rendererType, offscreenRef.current.petCtx, theme)
+    const renderer = createRenderer(rendererType, offscreenRef.current.petCtx, theme, saved.skin || 'lumie')
 
     renderer.init().then(() => {
       rendererRef.current = renderer
