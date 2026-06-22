@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback } from 'react'
 import { ChatEngine } from '../ai'
-import { getThemeBySkin, audioManager, type SkinId } from '../pet'
+import { getThemeBySkin, audioManager, type SkinId, type IRenderer } from '../pet'
 import { loadSettings, type PetSettings } from '../utils/storage'
 import { usePetStore, type PanelType } from '../store/petStore'
 
@@ -12,7 +12,7 @@ import { usePetStore, type PanelType } from '../store/petStore'
 const isTauri = !!window.__TAURI_INTERNALS__
 
 export function useChat(
-  reinitTheme: (theme: Parameters<import('../pet').PixelRenderer['reinit']>[0]) => void,
+  reinitTheme: (theme: Parameters<IRenderer['reinit']>[0]) => void,
   getParticleSystem: () => import('../pet').ParticleSystem,
   getStateMachine: () => import('../pet').StateMachine,
   PET_CENTER_X: number,

@@ -109,6 +109,7 @@ export interface PetSettings {
   reminderInterval: number // 分钟
   soundEnabled: boolean
   soundVolume: number // 0~1
+  rendererType: 'pixel' | 'canvas'
 }
 
 const SETTINGS_KEY = 'pet_settings'
@@ -124,6 +125,7 @@ const DEFAULT_SETTINGS: PetSettings = {
   reminderInterval: 60,
   soundEnabled: true,
   soundVolume: 0.3,
+  rendererType: 'pixel',
 }
 
 export function loadSettings(): PetSettings {

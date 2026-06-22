@@ -2,17 +2,21 @@ import { useRef, useEffect } from 'react'
 import {
   StateMachine,
   BehaviorTree,
-  PixelRenderer,
   ParticleSystem,
   SpringPhysics2D,
   getThemeBySkin,
+  createRenderer,
+  type IRenderer,
   type SkinId,
+  type RendererType,
 } from '../pet'
+import { loadSettings } from '../utils/storage'
 import { usePetStore } from '../store/petStore'
 
 // ============================================
 // 宠物渲染 Hook — Canvas 生命周期 + 渲染循环
 // 含边界碰撞检测
+// 使用 IRenderer 接口 + 工厂创建
 // ============================================
 
 const CANVAS_W = 300
@@ -28,7 +32,7 @@ const PET_MAX_Y = CANVAS_H - 20
 
 export function usePetRenderer() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const pixelRendererRef = useRef<PixelRenderer | null>(null)
+  const rendererRef = useRef<IRenderer | null>(null)
   const animFrameRef = useRef(0)
   const lastTimeRef = useRef(performance.now())
 
@@ -53,13 +57,14 @@ export function usePetRenderer() {
     const canvas = canvasRef.current
     if (!canvas) return
 
-    const saved = JSON.parse(localStorage.getItem('pet_settings') || '{}')
+    const saved = loadSettings()
     const theme = getThemeBySkin((saved.skin || 'lumie') as SkinId)
+    const rendererType = (saved.rendererType || 'pixel') as RendererType
     const ctx = canvas.getContext('2d')!
-    const renderer = new PixelRenderer(ctx, theme)
+    const renderer = createRenderer(rendererType, ctx, theme)
 
     renderer.init().then(() => {
-      pixelRendererRef.current = renderer
+      rendererRef.current = renderer
       setReady(true)
 
       const greeting = stateMachineRef.current.getRandomGreeting()
@@ -89,7 +94,7 @@ export function usePetRenderer() {
     if (!canvas) return
 
     const ctx = canvas.getContext('2d')!
-    const renderer = pixelRendererRef.current!
+    const renderer = rendererRef.current!
     const particles = particleSystemRef.current
     const physics = physicsRef.current
     const sm = stateMachineRef.current
@@ -170,9 +175,9 @@ export function usePetRenderer() {
   }, [])
 
   /** 切换皮肤后重新初始化渲染器 */
-  const reinitTheme = async (theme: Parameters<PixelRenderer['reinit']>[0]) => {
-    if (pixelRendererRef.current) {
-      await pixelRendererRef.current.reinit(theme)
+  const reinitTheme = async (theme: Parameters<IRenderer['reinit']>[0]) => {
+    if (rendererRef.current) {
+      await rendererRef.current.reinit(theme)
       particleSystemRef.current.emit('sparkle', PET_CENTER_X, PET_CENTER_Y - 20, 8)
     }
   }
