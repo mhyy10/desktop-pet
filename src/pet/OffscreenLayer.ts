@@ -1,8 +1,15 @@
+import type { PetAction } from './types'
+
 // ============================================
 // 离屏 Canvas 分层管理
 // 宠物层 + 粒子层 → 主 Canvas 合成
 // 脏标记策略：仅变化时重绘
 // ============================================
+
+/** 判断指定 action 是否为静态动画（不需要逐帧重绘宠物层） */
+export function isStaticAction(action: PetAction): boolean {
+  return action === 'sleep'
+}
 
 export class OffscreenLayer {
   private petCanvas: HTMLCanvasElement

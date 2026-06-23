@@ -98,6 +98,11 @@ export class PixelRenderer implements IRenderer {
     return this.animController.tick(deltaMs)
   }
 
+  /** 最近一次 tick 是否导致帧变化 */
+  get hasFrameChanged(): boolean {
+    return this.animController?.hasFrameChanged ?? false
+  }
+
   private drawGlow(ctx: CanvasRenderingContext2D, _mood: PetMood, timeMs: number) {
     const [r, g, b] = hexToRgb(this.theme.glowColor)
     const pulse = 0.3 + Math.sin(timeMs * 0.002) * 0.1

@@ -6,6 +6,7 @@ import {
   SpringPhysics2D,
   OffscreenLayer,
   FrameRateController,
+  isStaticAction,
   getThemeBySkin,
   createRenderer,
   type IRenderer,
@@ -195,19 +196,29 @@ export function usePetRenderer() {
       const currentMood = sm.mood
 
       // 离屏缓存：宠物层
-      if (currentMood !== prevMoodRef.current || currentAction !== prevActionRef.current) {
+      // mood/action 变化 OR 动画帧变化（非静态 action）→ 标记脏
+      const moodChanged = currentMood !== prevMoodRef.current
+      const actionChanged = currentAction !== prevActionRef.current
+
+      renderer.tick(delta)
+
+      // 检查渲染器是否有帧变化（通过 hasFrameChanged getter）
+      const frameChanged = (renderer as any).hasFrameChanged === true
+
+      if (moodChanged || actionChanged) {
         offscreen.markPetDirty()
         prevMoodRef.current = currentMood
         prevActionRef.current = currentAction
       }
 
+      if (frameChanged && !isStaticAction(currentAction)) {
+        offscreen.markPetDirty()
+      }
+
       if (offscreen.isPetDirty) {
         offscreen.clearPet()
-        renderer.tick(delta)
         renderer.draw(currentMood, currentAction, pos.x, pos.y, now, 1.0)
         offscreen.clearPetDirty()
-      } else {
-        renderer.tick(delta)
       }
 
       // 离屏缓存：粒子层

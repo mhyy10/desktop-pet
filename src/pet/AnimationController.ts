@@ -17,6 +17,8 @@ export class AnimationController {
   private frameElapsed: number = 0
   /** 是否已完成（非循环动画用） */
   private _isFinished: boolean = false
+  /** 上一帧索引，用于检测帧是否变化 */
+  private _prevFrameIndex: number = -1
 
   constructor(animations: Map<PetAction, SpriteAnimation>) {
     this.animations = animations
@@ -33,13 +35,18 @@ export class AnimationController {
 
   /** 每帧 tick，返回当前帧索引和动作 */
   tick(deltaMs: number): { frameIndex: number; action: PetAction } {
+    // 保存 tick 前的帧索引，用于 hasFrameChanged 检测
+    const prevFrame = this.currentFrameIndex
+
     const anim = this.animations.get(this.currentAction)
     if (!anim || anim.frames.length === 0) {
+      this._prevFrameIndex = prevFrame
       return { frameIndex: 0, action: this.currentAction }
     }
 
     // 如果动画已结束且不循环
     if (this._isFinished) {
+      this._prevFrameIndex = prevFrame
       return {
         frameIndex: this.currentFrameIndex,
         action: this.currentAction,
@@ -66,10 +73,17 @@ export class AnimationController {
       }
     }
 
+    this._prevFrameIndex = prevFrame
+
     return {
       frameIndex: this.currentFrameIndex,
       action: this.currentAction,
     }
+  }
+
+  /** 最近一次 tick 是否导致帧变化 */
+  get hasFrameChanged(): boolean {
+    return this.currentFrameIndex !== this._prevFrameIndex
   }
 
   /** 获取当前动作 */

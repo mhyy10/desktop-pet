@@ -44,6 +44,11 @@ export class PetRenderer implements IRenderer {
     // no-op
   }
 
+  /** Canvas 渲染器每帧都变化，始终返回 true */
+  get hasFrameChanged(): boolean {
+    return true
+  }
+
   /** 主绘制入口 */
   draw(
     mood: PetMood,
