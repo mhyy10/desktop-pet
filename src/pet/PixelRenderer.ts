@@ -1,5 +1,5 @@
 import type { PetMood, PetAction, PetTheme } from './types'
-import type { IRenderer } from './IRenderer'
+import type { IRenderer, TickResult } from './IRenderer'
 import type { SpriteSheet } from './SpriteGenerator'
 import { AnimationController } from './AnimationController'
 import { generateSheetWithCache } from './SpriteCache'
@@ -92,15 +92,11 @@ export class PixelRenderer implements IRenderer {
     ctx.restore()
   }
 
-  /** 更新动画控制器 */
-  tick(deltaMs: number): { frameIndex: number; action: PetAction } {
-    if (!this.animController) return { frameIndex: 0, action: 'idle_stand' }
-    return this.animController.tick(deltaMs)
-  }
-
-  /** 最近一次 tick 是否导致帧变化 */
-  get hasFrameChanged(): boolean {
-    return this.animController?.hasFrameChanged ?? false
+  /** 更新动画控制器，返回 TickResult */
+  tick(deltaMs: number): TickResult {
+    if (!this.animController) return { frameChanged: false }
+    this.animController.tick(deltaMs)
+    return { frameChanged: this.animController.hasFrameChanged }
   }
 
   private drawGlow(ctx: CanvasRenderingContext2D, _mood: PetMood, timeMs: number) {

@@ -5,6 +5,12 @@ import type { PetMood, PetAction, PetTheme } from './types'
 // PetRenderer / PixelRenderer 均实现此接口
 // ============================================
 
+/** tick() 返回结果 */
+export interface TickResult {
+  /** 最近一次 tick 是否导致动画帧变化 */
+  frameChanged: boolean
+}
+
 export interface IRenderer {
   /** 异步初始化资源（如生成精灵图） */
   init(): Promise<void>
@@ -15,8 +21,8 @@ export interface IRenderer {
   /** 是否初始化完成 */
   readonly isReady: boolean
 
-  /** 每帧更新（动画帧推进） */
-  tick(deltaMs: number): void
+  /** 每帧更新（动画帧推进），返回帧是否变化 */
+  tick(deltaMs: number): TickResult
 
   /** 主绘制入口 */
   draw(

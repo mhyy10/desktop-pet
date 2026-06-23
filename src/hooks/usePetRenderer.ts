@@ -200,10 +200,7 @@ export function usePetRenderer() {
       const moodChanged = currentMood !== prevMoodRef.current
       const actionChanged = currentAction !== prevActionRef.current
 
-      renderer.tick(delta)
-
-      // 检查渲染器是否有帧变化（通过 hasFrameChanged getter）
-      const frameChanged = (renderer as any).hasFrameChanged === true
+      const tickResult = renderer.tick(delta)
 
       if (moodChanged || actionChanged) {
         offscreen.markPetDirty()
@@ -211,7 +208,7 @@ export function usePetRenderer() {
         prevActionRef.current = currentAction
       }
 
-      if (frameChanged && !isStaticAction(currentAction)) {
+      if (tickResult.frameChanged && !isStaticAction(currentAction)) {
         offscreen.markPetDirty()
       }
 

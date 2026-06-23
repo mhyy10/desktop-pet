@@ -1,5 +1,5 @@
 import type { PetMood, PetAction, PetTheme } from './types'
-import type { IRenderer } from './IRenderer'
+import type { IRenderer, TickResult } from './IRenderer'
 import { defaultTheme } from './theme'
 
 // ============================================
@@ -39,14 +39,9 @@ export class PetRenderer implements IRenderer {
     return this._isReady
   }
 
-  /** Canvas 渲染器无需帧推进（动画在 draw 中计算） */
-  tick(_deltaMs: number): void {
-    // no-op
-  }
-
-  /** Canvas 渲染器每帧都变化，始终返回 true */
-  get hasFrameChanged(): boolean {
-    return true
+  /** Canvas 渲染器每帧都变化 */
+  tick(_deltaMs: number): TickResult {
+    return { frameChanged: true }
   }
 
   /** 主绘制入口 */
