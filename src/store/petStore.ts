@@ -18,6 +18,7 @@ interface PetStore {
   activePanel: PanelType
   reminderNotif: { icon: string; text: string } | null
   currentModel: string
+  petName: string
   messages: ChatMessage[]
 
   // 交互时间（用于状态机判断闲置时长）
@@ -32,6 +33,7 @@ interface PetStore {
   setActivePanel: (p: PanelType) => void
   setReminderNotif: (n: { icon: string; text: string } | null) => void
   setCurrentModel: (m: string) => void
+  setPetName: (name: string) => void
   addMessage: (msg: ChatMessage) => void
   setMessages: (msgs: ChatMessage[]) => void
   updateInteraction: () => void
@@ -48,6 +50,7 @@ export const usePetStore = create<PetStore>((set) => ({
   activePanel: null,
   reminderNotif: null,
   currentModel: 'zhanlu/glm-5.1',
+  petName: '小光',
   messages: [],
   lastInteractionTime: Date.now(),
 
@@ -60,6 +63,7 @@ export const usePetStore = create<PetStore>((set) => ({
   setActivePanel: (activePanel) => set({ activePanel }),
   setReminderNotif: (reminderNotif) => set({ reminderNotif }),
   setCurrentModel: (currentModel) => set({ currentModel }),
+  setPetName: (petName) => set({ petName }),
   addMessage: (msg) => set((s) => ({ messages: [...s.messages, msg] })),
   setMessages: (messages) => set({ messages }),
   updateInteraction: () => set({ lastInteractionTime: Date.now() }),

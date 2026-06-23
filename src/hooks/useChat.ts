@@ -32,6 +32,7 @@ export function useChat(
       petName: saved.petName || '小光',
     })
     store.getState().setCurrentModel(saved.model)
+    store.getState().setPetName(saved.petName || '小光')
 
     // 同步音效设置
     audioManager.setEnabled(saved.soundEnabled)
@@ -152,6 +153,7 @@ export function useChat(
   const handleSettingsChange = useCallback((settings: PetSettings) => {
     const s = store.getState()
     s.setCurrentModel(settings.model)
+    s.setPetName(settings.petName || '小光')
 
     audioManager.setEnabled(settings.soundEnabled)
     audioManager.setVolume(settings.soundVolume)
