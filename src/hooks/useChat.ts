@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback } from 'react'
 import { ChatEngine, ProactiveEngine, analyzeMood } from '../ai'
-import { getThemeBySkin, audioManager, type SkinId, type IRenderer } from '../pet'
+import { getThemeBySkin, audioManager, type SkinId, type IRenderer, type RendererType, type PetTheme } from '../pet'
 import { loadSettings, type PetSettings } from '../utils/storage'
 import { usePetStore } from '../store/petStore'
 
@@ -12,6 +12,7 @@ const isTauri = !!window.__TAURI_INTERNALS__
 
 export function useChat(
   reinitTheme: (theme: Parameters<IRenderer['reinit']>[0]) => void,
+  reinitRenderer: (type: RendererType, theme: PetTheme, skinId: string) => Promise<void>,
   getParticleSystem: () => import('../pet').ParticleSystem,
   getStateMachine: () => import('../pet').StateMachine,
   PET_CENTER_X: number,
@@ -161,7 +162,12 @@ export function useChat(
     // 切换皮肤 → 重新生成精灵图
     const theme = getThemeBySkin((settings.skin || 'lumie') as SkinId)
     reinitTheme(theme)
-  }, [store, reinitTheme])
+
+    // 切换渲染器类型 → 重建渲染器
+    if (settings.rendererType) {
+      reinitRenderer(settings.rendererType, theme, settings.skin || 'lumie')
+    }
+  }, [store, reinitTheme, reinitRenderer])
 
   return {
     chatEngine: chatEngineRef.current,

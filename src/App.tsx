@@ -36,7 +36,7 @@ export default function App() {
   const {
     canvasRef, CANVAS_W, CANVAS_H,
     PET_CENTER_X, PET_CENTER_Y,
-    reinitTheme, getStateMachine, getParticleSystem, getPhysics,
+    reinitTheme, reinitRenderer, getStateMachine, getParticleSystem, getPhysics,
   } = usePetRenderer()
 
   const { canvasEventProps, containerEventProps } = usePetInteraction({
@@ -50,7 +50,7 @@ export default function App() {
 
   const {
     chatEngine, handleSendMessage, handleQuickAction, handleSettingsChange,
-  } = useChat(reinitTheme, getParticleSystem, getStateMachine, PET_CENTER_X, PET_CENTER_Y)
+  } = useChat(reinitTheme, reinitRenderer, getParticleSystem, getStateMachine, PET_CENTER_X, PET_CENTER_Y)
 
   // ---- 渲染 ----
   return (

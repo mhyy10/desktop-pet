@@ -165,6 +165,18 @@ export function SettingsPanel({ chatEngine, onClose, onSettingsChange }: Setting
               />
             </div>
 
+            <div className="settings-row">
+              <label className="settings-label">渲染器</label>
+              <select
+                className="settings-select"
+                value={settings.rendererType}
+                onChange={(e) => handleChange({ rendererType: e.target.value as 'pixel' | 'canvas' })}
+              >
+                <option value="pixel">像素风（推荐）</option>
+                <option value="canvas">程序化绘制</option>
+              </select>
+            </div>
+
             <div className="settings-row settings-row-center">
               <label className="settings-label">主动提醒</label>
               <button

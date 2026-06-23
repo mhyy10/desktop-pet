@@ -14,6 +14,7 @@ import {
   type RendererType,
   type PetMood,
   type PetAction,
+  type PetTheme,
 } from '../pet'
 import { loadSettings } from '../utils/storage'
 import { usePetStore } from '../store/petStore'
@@ -255,8 +256,18 @@ export function usePetRenderer() {
     }
   }
 
+  /** 切换渲染器类型（pixel/canvas） */
+  const reinitRenderer = async (type: RendererType, theme: PetTheme, skinId: string = 'lumie') => {
+    if (!offscreenRef.current) return
+    const renderer = createRenderer(type, offscreenRef.current.petCtx, theme, skinId)
+    await renderer.init()
+    rendererRef.current = renderer
+    offscreenRef.current.markPetDirty()
+    particleSystemRef.current.emit('sparkle', PET_CENTER_X, PET_CENTER_Y - 20, 8)
+  }
+
   return {
     canvasRef, CANVAS_W, CANVAS_H, PET_CENTER_X, PET_CENTER_Y,
-    reinitTheme, getStateMachine, getParticleSystem, getPhysics,
+    reinitTheme, reinitRenderer, getStateMachine, getParticleSystem, getPhysics,
   }
 }
