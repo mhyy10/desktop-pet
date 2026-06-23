@@ -51,7 +51,7 @@ export function useChat(
 
   // ---- 主动对话定时检查 ----
   useEffect(() => {
-    const interval = setInterval(() => {
+    const interval = setInterval(async () => {
       const s = store.getState()
       if (s.isDragging || s.isChatOpen) return
 
@@ -65,7 +65,11 @@ export function useChat(
         isChatOpen: false,
       }
 
-      const message = proactiveRef.current.check(petState, chatEngineRef.current.conversationMemory)
+      const proactiveEngine = proactiveRef.current
+      const chatEngine = chatEngineRef.current
+
+      // 本地规则优先
+      const message = proactiveEngine.check(petState, chatEngine.conversationMemory)
       if (message) {
         s.addMessage({
           id: crypto.randomUUID(),
@@ -74,6 +78,24 @@ export function useChat(
           timestamp: Date.now(),
         })
         audioManager.play('greet')
+      } else if (proactiveEngine.shouldLLMFire(petState) && chatEngine.currentMode === 'cloud') {
+        // LLM 主动对话（低频，30分钟冷却）
+        proactiveEngine.markLLMFire()
+        try {
+          const llmMessage = await chatEngine.chat(
+            '请主动和主人说句话，可以聊聊你记得的事情或者提个有趣的话题。',
+            s.mood,
+          )
+          s.addMessage({
+            id: crypto.randomUUID(),
+            role: 'pet',
+            content: llmMessage,
+            timestamp: Date.now(),
+          })
+          audioManager.play('greet')
+        } catch {
+          // LLM 失败静默
+        }
       }
     }, 15_000) // 每15秒检查一次
     return () => clearInterval(interval)

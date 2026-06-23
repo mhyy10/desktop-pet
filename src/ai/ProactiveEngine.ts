@@ -106,6 +106,14 @@ export class ProactiveEngine {
     return Date.now() - this.lastLLMFire > ProactiveEngine.LLM_COOLDOWN
   }
 
+  /** 检查是否应该触发 LLM 主动对话 */
+  shouldLLMFire(petState: PetState): boolean {
+    if (!this.canLLMFire) return false
+    if (petState.isDragging || petState.isChatOpen) return false
+    if (petState.mood === 'sleeping') return false
+    return true
+  }
+
   /** 标记 LLM 触发器已使用 */
   markLLMFire(): void {
     this.lastLLMFire = Date.now()
