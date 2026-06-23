@@ -4,6 +4,7 @@ import {
   updateSettings,
   type PetSettings,
 } from '../utils/storage'
+import { setAutoStart } from '../utils/autostart'
 import { AVAILABLE_MODELS } from '../ai'
 import type { ChatEngine } from '../ai'
 import { SKINS, audioManager } from '../pet'
@@ -175,6 +176,20 @@ export function SettingsPanel({ chatEngine, onClose, onSettingsChange }: Setting
                 <option value="pixel">像素风（推荐）</option>
                 <option value="canvas">程序化绘制</option>
               </select>
+            </div>
+
+            <div className="settings-row settings-row-center">
+              <label className="settings-label">开机自启</label>
+              <button
+                className={`settings-toggle ${settings.autoStart ? 'on' : ''}`}
+                onClick={async () => {
+                  const newVal = !settings.autoStart
+                  handleChange({ autoStart: newVal })
+                  await setAutoStart(newVal)
+                }}
+              >
+                <span className="settings-toggle-thumb" />
+              </button>
             </div>
 
             <div className="settings-row settings-row-center">
