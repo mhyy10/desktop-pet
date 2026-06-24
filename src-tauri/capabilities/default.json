@@ -16,6 +16,7 @@
     "core:window:allow-is-visible",
     "core:tray:default",
     "core:event:default",
-    "opener:default"
+    "opener:default",
+    "autostart:default"
   ]
 }
