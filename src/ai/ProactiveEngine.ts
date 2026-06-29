@@ -62,7 +62,7 @@ const GREETING_TRIGGER: ProactiveTrigger = {
     const facts = memory.getFacts()
     if (facts.length > 0) {
       const fact = facts[Math.floor(Math.random() * facts.length)]
-      return `对了，我还记得你说过：${fact} 😊`
+      return `对了，我还记得你说过：${fact.content} 😊`
     }
     return pick(['今天心情怎么样？', '有什么我能帮忙的吗？', '嘿嘿～ ✨'])
   },

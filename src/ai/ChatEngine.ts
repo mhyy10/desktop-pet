@@ -1,5 +1,6 @@
 import type { ChatMessage } from '../pet/types'
 import { ConversationMemory } from './ConversationMemory'
+import type { FactCategory, FactImportance } from './memoryTypes'
 
 // ============================================
 // AI 对话引擎
@@ -70,7 +71,7 @@ export class ChatEngine {
 
     if (shouldUseCloud) {
       try {
-        reply = await this.callCloudAPI(mood)
+        reply = await this.callCloudAPI(mood, userText)
         this.failCount = 0
       } catch {
         this.failCount++
@@ -195,10 +196,14 @@ export class ChatEngine {
   }
 
   // ---- 云端 API（含记忆上下文） ----
-  private async callCloudAPI(mood: string): Promise<string> {
+  private async callCloudAPI(mood: string, userText: string): Promise<string> {
     this.abortController = new AbortController()
 
-    const systemPrompt = this.memory.buildContextPrompt(this.config.petName ?? '小光', mood)
+    const systemPrompt = this.memory.buildContextPrompt(
+      this.config.petName ?? '小光',
+      mood,
+      userText,
+    )
     const shortTerm = this.memory.getShortTerm()
 
     const messages = [
@@ -241,12 +246,10 @@ export class ChatEngine {
     try {
       const recent = this.memory.getShortTerm()
       const text = recent.map((m) => `${m.role === 'user' ? '用户' : '宠物'}: ${m.content}`).join('\n')
-      const summaryPrompt = `请总结以下对话的关键内容（50字以内），并提取关于用户的关键事实（如偏好、名字、重要事件），每条事实一行。
-格式：
-摘要：...
-事实：
-- 事实1
-- 事实2
+      const summaryPrompt = `请总结以下对话的关键内容（50字以内），并提取关于用户的关键事实（如偏好、名字、重要事件）。
+严格只输出一个 JSON 对象，不要任何额外文字、不要 markdown 代码块：
+{"summary":"50字以内的对话摘要","facts":[{"content":"事实内容","category":"identity|preference|event|relation|other","importance":"permanent|normal"}]}
+其中 category：identity=身份（名字/职业等，importance 应为 permanent）、preference=偏好、event=事件、relation=人际关系、other=其他。importance：permanent=应永久记住、normal=普通。仅提取确实值得长期记住的事实，无则 facts 为空数组。
 
 对话内容：
 ${text}`
@@ -260,7 +263,7 @@ ${text}`
         body: JSON.stringify({
           model: this.config.model,
           messages: [{ role: 'user', content: summaryPrompt }],
-          max_tokens: 200,
+          max_tokens: 300,
           temperature: 0.3,
         }),
       })
@@ -270,13 +273,14 @@ ${text}`
       const content: string = data.choices?.[0]?.message?.content
       if (!content) return
 
-      const summaryMatch = content.match(/摘要[：:]\s*(.+)/)
-      const factsMatch = content.match(/事实[：:]\s*\n([\s\S]*?)$/)
-      const summary = summaryMatch?.[1]?.trim() ?? ''
-      const facts = (factsMatch?.[1] ?? '').split('\n').map((l) => l.replace(/^-\s*/, '').trim()).filter(Boolean)
-
-      if (summary || facts.length > 0) {
-        this.memory.updateSummary(summary, facts)
+      const parsed = parseSummaryResponse(content)
+      if (parsed.summary) {
+        // 摘要走累积式存储（updateSummary 内部拼接最近 N 段）
+        this.memory.updateSummary(parsed.summary, [])
+      }
+      // 事实单独走 addFact（去重 + 归一化 + 衰减），与摘要解耦
+      for (const fact of parsed.facts) {
+        this.memory.addFact(fact.content, fact.category, fact.importance)
       }
     } catch {
       // 摘要失败不影响主流程
@@ -305,4 +309,95 @@ ${text}`
 
 function pick(arr: string[]): string {
   return arr[Math.floor(Math.random() * arr.length)]
+}
+
+// ============================================
+// 摘要响应解析 — 纯函数，可单测
+// 策略：优先 JSON.parse（LLM 按规范输出时），失败回退正则（兼容旧格式/格式漂移）
+// ============================================
+
+interface ParsedFact {
+  content: string
+  category: FactCategory
+  importance: FactImportance
+}
+
+interface ParsedSummary {
+  summary: string
+  facts: ParsedFact[]
+}
+
+const VALID_CATEGORIES: FactCategory[] = ['identity', 'preference', 'event', 'relation', 'other']
+const VALID_IMPORTANCE: FactImportance[] = ['permanent', 'normal']
+
+function normalizeCategory(v: unknown): FactCategory {
+  return VALID_CATEGORIES.includes(v as FactCategory) ? (v as FactCategory) : 'other'
+}
+
+function normalizeImportance(v: unknown): FactImportance {
+  return VALID_IMPORTANCE.includes(v as FactImportance) ? (v as FactImportance) : 'normal'
+}
+
+/**
+ * 解析 LLM 摘要响应。
+ * 1. 尝试从内容中提取 JSON 对象并 parse（兼容被 markdown 代码块包裹的情况）
+ * 2. JSON 失败则回退正则：摘要 `摘要：...`，事实 `事实：` 后每行 `- xxx`
+ */
+export function parseSummaryResponse(content: string): ParsedSummary {
+  // ---- 策略1：JSON ----
+  const jsonStr = extractJson(content)
+  if (jsonStr) {
+    try {
+      const obj = JSON.parse(jsonStr)
+      const summary = typeof obj.summary === 'string' ? obj.summary.trim() : ''
+      const facts: ParsedFact[] = Array.isArray(obj.facts)
+        ? obj.facts
+            .map((f: unknown) => {
+              if (typeof f === 'string') {
+                return { content: f, category: 'other' as FactCategory, importance: 'normal' as FactImportance }
+              }
+              if (f && typeof f === 'object' && typeof (f as ParsedFact).content === 'string') {
+                const fact = f as ParsedFact
+                return {
+                  content: fact.content,
+                  category: normalizeCategory(fact.category),
+                  importance: normalizeImportance(fact.importance),
+                }
+              }
+              return null
+            })
+            .filter((f: ParsedFact | null): f is ParsedFact => f !== null && f.content.trim() !== '')
+        : []
+      if (summary || facts.length > 0) {
+        return { summary, facts }
+      }
+    } catch {
+      // JSON 解析失败，回退正则
+    }
+  }
+
+  // ---- 策略2：正则回退 ----
+  const summaryMatch = content.match(/摘要[：:]\s*([^\n]+)/)
+  const factsMatch = content.match(/事实[：:]\s*\n([\s\S]*?)$/)
+  const summary = summaryMatch?.[1]?.trim() ?? ''
+  const facts: ParsedFact[] = (factsMatch?.[1] ?? '')
+    .split('\n')
+    .map((l) => l.replace(/^[-•*\s]+/, '').trim())
+    .filter(Boolean)
+    .map((line) => ({ content: line, category: 'other' as FactCategory, importance: 'normal' as FactImportance }))
+
+  return { summary, facts }
+}
+
+/** 从可能含 markdown 代码块的文本中提取首个 JSON 对象字符串 */
+function extractJson(content: string): string | null {
+  const trimmed = content.trim()
+  // 去除 markdown 代码块包裹
+  const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/)
+  const candidate = fenceMatch ? fenceMatch[1].trim() : trimmed
+  // 找到第一个 { 到最后一个 } 之间的内容
+  const start = candidate.indexOf('{')
+  const end = candidate.lastIndexOf('}')
+  if (start === -1 || end === -1 || end <= start) return null
+  return candidate.slice(start, end + 1)
 }
