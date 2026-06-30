@@ -54,6 +54,12 @@ export function usePetRenderer() {
   const physicsRef = useRef(new SpringPhysics2D(PET_CENTER_X, PET_CENTER_Y))
   const lastBounceRef = useRef<{ x: 'none' | 'min' | 'max' | 'both'; y: 'none' | 'min' | 'max' | 'both' }>({ x: 'none', y: 'none' })
 
+  // 防止 React StrictMode 开发模式双调用导致 offscreenRef 与 rendererRef 指向不同实例
+  // （StrictMode 会挂载→卸载→重挂 effect：第二次创建新 OffscreenLayer，但第一次的
+  //  renderer.init() 异步回调仍会把 rendererRef 指向旧 offscreen 的 ctx，造成 draw 与
+  //  composite 操作在两个不同 canvas 上 → 主画布空白）
+  const initVersionRef = useRef(0)
+
   const { setReady, setMood, setAction, addMessage, isReady } = usePetStore()
 
   const getStateMachine = () => stateMachineRef.current
@@ -69,10 +75,17 @@ export function usePetRenderer() {
     const theme = getThemeBySkin((saved.skin || 'lumie') as SkinId)
     const rendererType = (saved.rendererType || 'pixel') as RendererType
 
-    offscreenRef.current = new OffscreenLayer(CANVAS_W, CANVAS_H)
-    const renderer = createRenderer(rendererType, offscreenRef.current.petCtx, theme, saved.skin || 'lumie')
+    // 每次 effect 执行都重新创建 offscreen + renderer，保证二者引用同一实例
+    const offscreen = new OffscreenLayer(CANVAS_W, CANVAS_H)
+    offscreenRef.current = offscreen
+    const renderer = createRenderer(rendererType, offscreen.petCtx, theme, saved.skin || 'lumie')
+
+    // 本轮 init 的版本号；若已被新一轮 effect 取代则丢弃回调结果
+    const version = ++initVersionRef.current
 
     renderer.init().then(() => {
+      // StrictMode 卸载重挂、或 effect 重跑导致 offscreenRef 已被替换 → 丢弃本次结果
+      if (version !== initVersionRef.current) return
       rendererRef.current = renderer
       setReady(true)
       addMessage({
