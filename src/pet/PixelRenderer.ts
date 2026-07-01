@@ -34,9 +34,10 @@ export class PixelRenderer implements IRenderer {
     this._isReady = true
   }
 
-  /** 切换主题后重新生成精灵图 */
-  async reinit(newTheme: PetTheme): Promise<void> {
+  /** 切换主题/皮肤后重新生成精灵图（skinId 变化时刷新缓存 key） */
+  async reinit(newTheme: PetTheme, skinId?: string): Promise<void> {
     this.theme = newTheme
+    if (skinId !== undefined) this.skinId = skinId
     this._isReady = false
     await this.init()
   }

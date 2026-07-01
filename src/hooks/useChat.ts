@@ -11,7 +11,7 @@ import { usePetStore } from '../store/petStore'
 const isTauri = !!window.__TAURI_INTERNALS__
 
 export function useChat(
-  reinitTheme: (theme: Parameters<IRenderer['reinit']>[0]) => void,
+  reinitTheme: (theme: Parameters<IRenderer['reinit']>[0], skinId?: string) => void,
   reinitRenderer: (type: RendererType, theme: PetTheme, skinId: string) => Promise<void>,
   getParticleSystem: () => import('../pet').ParticleSystem,
   getStateMachine: () => import('../pet').StateMachine,
@@ -161,9 +161,9 @@ export function useChat(
     // 更新宠物名字到 ChatEngine
     chatEngineRef.current.updateConfig({ petName: settings.petName || '小光' })
 
-    // 切换皮肤 → 重新生成精灵图
+    // 切换皮肤 → 重新生成精灵图（传 skinId 刷新精灵图缓存 key，否则命中旧皮肤缓存）
     const theme = getThemeBySkin((settings.skin || 'lumie') as SkinId)
-    reinitTheme(theme)
+    reinitTheme(theme, settings.skin || 'lumie')
 
     // 切换渲染器类型 → 重建渲染器
     if (settings.rendererType) {

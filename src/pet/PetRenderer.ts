@@ -30,8 +30,8 @@ export class PetRenderer implements IRenderer {
     this._isReady = true
   }
 
-  /** 切换主题 */
-  async reinit(theme: PetTheme): Promise<void> {
+  /** 切换主题（canvas 渲染器每帧实时绘制，无需 skinId） */
+  async reinit(theme: PetTheme, _skinId?: string): Promise<void> {
     this.theme = theme
   }
 

@@ -59,6 +59,10 @@ export function usePetRenderer() {
   //  renderer.init() 异步回调仍会把 rendererRef 指向旧 offscreen 的 ctx，造成 draw 与
   //  composite 操作在两个不同 canvas 上 → 主画布空白）
   const initVersionRef = useRef(0)
+  // reinit 版本号：防止快速连续切皮肤时并发 init 竞争覆盖 sheet
+  const reinitVersionRef = useRef(0)
+  // 当前渲染器类型：reinitRenderer 仅在类型变化时才重建 renderer
+  const rendererTypeRef = useRef<RendererType>('pixel')
 
   const { setReady, setMood, setAction, addMessage, isReady } = usePetStore()
 
@@ -79,6 +83,7 @@ export function usePetRenderer() {
     const offscreen = new OffscreenLayer(CANVAS_W, CANVAS_H)
     offscreenRef.current = offscreen
     const renderer = createRenderer(rendererType, offscreen.petCtx, theme, saved.skin || 'lumie')
+    rendererTypeRef.current = rendererType
 
     // 本轮 init 的版本号；若已被新一轮 effect 取代则丢弃回调结果
     const version = ++initVersionRef.current
@@ -261,20 +266,31 @@ export function usePetRenderer() {
     return () => clearInterval(interval)
   }, [])
 
-  const reinitTheme = async (theme: Parameters<IRenderer['reinit']>[0]) => {
-    if (rendererRef.current) {
-      await rendererRef.current.reinit(theme)
-      offscreenRef.current?.markPetDirty()
-      particleSystemRef.current.emit('sparkle', PET_CENTER_X, PET_CENTER_Y - 20, 8)
-    }
+  const reinitTheme = async (theme: Parameters<IRenderer['reinit']>[0], skinId?: string) => {
+    const renderer = rendererRef.current
+    if (!renderer) return
+    // 版本号：防止快速连续切换皮肤时，旧 reinit 的 async init 回调
+    // 覆盖新 sheet（并发 init 竞争会导致 this.sheet 指向旧皮肤）
+    const version = ++reinitVersionRef.current
+    await renderer.reinit(theme, skinId)
+    // 期间若有更新的 reinit 发生，丢弃本次 markPetDirty（新 reinit 会自己标记）
+    if (version !== reinitVersionRef.current) return
+    offscreenRef.current?.markPetDirty()
+    particleSystemRef.current.emit('sparkle', PET_CENTER_X, PET_CENTER_Y - 20, 8)
   }
 
-  /** 切换渲染器类型（pixel/canvas） */
+  /** 切换渲染器类型（pixel/canvas）— 仅在类型变化时重建 */
   const reinitRenderer = async (type: RendererType, theme: PetTheme, skinId: string = 'lumie') => {
     if (!offscreenRef.current) return
+    // 类型未变化时走 reinitTheme 路径（复用 renderer，避免无谓重建 + 并发竞争）
+    if (type === rendererTypeRef.current) {
+      await reinitTheme(theme, skinId)
+      return
+    }
     const renderer = createRenderer(type, offscreenRef.current.petCtx, theme, skinId)
     await renderer.init()
     rendererRef.current = renderer
+    rendererTypeRef.current = type
     offscreenRef.current.markPetDirty()
     particleSystemRef.current.emit('sparkle', PET_CENTER_X, PET_CENTER_Y - 20, 8)
   }

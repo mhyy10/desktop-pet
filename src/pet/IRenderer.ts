@@ -15,8 +15,8 @@ export interface IRenderer {
   /** 异步初始化资源（如生成精灵图） */
   init(): Promise<void>
 
-  /** 切换主题后重新初始化 */
-  reinit(theme: PetTheme): Promise<void>
+  /** 切换主题后重新初始化（可选 skinId，用于刷新精灵图缓存 key） */
+  reinit(theme: PetTheme, skinId?: string): Promise<void>
 
   /** 是否初始化完成 */
   readonly isReady: boolean
