@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback } from 'react'
 import { ChatEngine, ProactiveEngine, analyzeMood } from '../ai'
-import { getThemeBySkin, audioManager, type SkinId, type IRenderer, type RendererType, type PetTheme } from '../pet'
+import { getThemeById, audioManager, type IRenderer, type RendererType, type PetTheme } from '../pet'
 import { loadSettings, type PetSettings } from '../utils/storage'
 import { usePetStore } from '../store/petStore'
 
@@ -162,8 +162,9 @@ export function useChat(
     chatEngineRef.current.updateConfig({ petName: settings.petName || '小光' })
 
     // 切换皮肤 → 重新生成精灵图（传 skinId 刷新精灵图缓存 key，否则命中旧皮肤缓存）
-    const theme = getThemeBySkin((settings.skin || 'lumie') as SkinId)
-    reinitTheme(theme, settings.skin || 'lumie')
+    const skinId = settings.skin || 'lumie'
+    const theme = getThemeById(skinId)
+    reinitTheme(theme, skinId)
 
     // 切换渲染器类型 → 重建渲染器
     if (settings.rendererType) {

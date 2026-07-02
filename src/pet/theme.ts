@@ -85,7 +85,14 @@ export const SKINS: SkinDefinition[] = [
 /** 默认主题（小光） */
 export const defaultTheme: PetTheme = SKINS[0].theme
 
-/** 根据 skinId 获取主题 */
+/** 默认皮肤 id（小光） */
+export const defaultSkinId: SkinId = SKINS[0].id
+
+/**
+ * 根据 skinId 获取主题（仅查询内置皮肤）
+ * 注意：自定义皮肤请用 skinRegistry.getThemeById，本函数对未知 id 返回 defaultTheme。
+ * 保留此函数以向后兼容；新代码应优先使用 getThemeById。
+ */
 export function getThemeBySkin(skinId: SkinId): PetTheme {
   return SKINS.find((s) => s.id === skinId)?.theme ?? defaultTheme
 }

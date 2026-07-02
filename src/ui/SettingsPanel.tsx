@@ -7,7 +7,19 @@ import {
 import { setAutoStart } from '../utils/autostart'
 import { AVAILABLE_MODELS } from '../ai'
 import type { ChatEngine } from '../ai'
-import { SKINS, audioManager } from '../pet'
+import {
+  audioManager,
+  getAllSkins,
+  unregisterCustomSkin,
+  parseSkinPack,
+  skinPackToCustomSkin,
+  serializeSkinPack,
+  downloadSkinPack,
+} from '../pet'
+import type { CustomSkin, RegisteredSkin } from '../pet'
+import { deleteCustomSkin, loadCustomSkins, saveCustomSkins } from '../utils/customSkins'
+import { registerCustomSkin } from '../pet/skinRegistry'
+import { SkinEditor } from './SkinEditor'
 import './SettingsPanel.css'
 
 interface SettingsPanelProps {
@@ -22,6 +34,11 @@ export function SettingsPanel({ chatEngine, onClose, onSettingsChange }: Setting
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<'ok' | 'fail' | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
+  const [skinList, setSkinList] = useState<RegisteredSkin[]>(getAllSkins)
+  const [editorState, setEditorState] = useState<
+    { mode: 'create' } | { mode: 'edit'; skin: CustomSkin } | null
+  >(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -45,6 +62,56 @@ export function SettingsPanel({ chatEngine, onClose, onSettingsChange }: Setting
     }
 
     onSettingsChange?.(updated)
+  }
+
+  /** 刷新皮肤列表（注册中心 + localStorage 同步） */
+  const refreshSkinList = () => setSkinList(getAllSkins())
+
+  /** 删除自定义皮肤 */
+  const handleDeleteSkin = (skin: RegisteredSkin) => {
+    if (skin.isBuiltIn) return
+    if (!confirm(`确定删除皮肤「${skin.name}」？`)) return
+    deleteCustomSkin(skin.id)
+    unregisterCustomSkin(skin.id)
+    // 若删除的是当前皮肤，回退到默认
+    if (settings.skin === skin.id) {
+      handleChange({ skin: 'lumie' })
+    }
+    refreshSkinList()
+  }
+
+  /** 导入皮肤包 */
+  const handleImportSkin = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = '' // 清空，允许重复导入同一文件
+    if (!file) return
+    try {
+      const text = await file.text()
+      const pack = parseSkinPack(text)
+      const skin = skinPackToCustomSkin(pack)
+      addCustomSkinImport(skin)
+      refreshSkinList()
+      alert(`已导入皮肤「${skin.name}」`)
+    } catch (err) {
+      alert('导入失败：' + (err instanceof Error ? err.message : String(err)))
+    }
+  }
+
+  /** 编辑器保存后回调 */
+  const handleSkinSaved = (skin: CustomSkin) => {
+    refreshSkinList()
+    // 提示是否立即应用
+    if (confirm(`皮肤「${skin.name}」已保存，是否立即应用？`)) {
+      handleChange({ skin: skin.id })
+    }
+  }
+
+  /** 把导入的皮肤写入 localStorage + 注册中心 */
+  const addCustomSkinImport = (skin: CustomSkin) => {
+    const list = loadCustomSkins()
+    list.push(skin)
+    saveCustomSkins(list)
+    registerCustomSkin(skin)
   }
 
   const handleTestConnection = async () => {
@@ -74,8 +141,8 @@ export function SettingsPanel({ chatEngine, onClose, onSettingsChange }: Setting
           <div className="settings-section">
             <div className="settings-section-title">🎨 皮肤</div>
             <div className="skin-grid">
-              {SKINS.map((skin) => (
-                <button
+              {skinList.map((skin) => (
+                <div
                   key={skin.id}
                   className={`skin-card ${settings.skin === skin.id ? 'active' : ''}`}
                   onClick={() => handleChange({ skin: skin.id })}
@@ -83,8 +150,62 @@ export function SettingsPanel({ chatEngine, onClose, onSettingsChange }: Setting
                 >
                   <span className="skin-icon">{skin.icon}</span>
                   <span className="skin-name">{skin.name}</span>
-                </button>
+                  {!skin.isBuiltIn && (
+                    <span className="skin-card-actions" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        className="skin-card-action"
+                        title="编辑"
+                        onClick={() => setEditorState({ mode: 'edit', skin })}
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        className="skin-card-action"
+                        title="导出"
+                        onClick={() => {
+                          const json = serializeSkinPack({
+                            name: skin.name,
+                            icon: skin.icon,
+                            description: skin.description,
+                            theme: skin.theme,
+                          })
+                          downloadSkinPack(`skin-${skin.name}`, json)
+                        }}
+                      >
+                        ⬇️
+                      </button>
+                      <button
+                        className="skin-card-action"
+                        title="删除"
+                        onClick={() => handleDeleteSkin(skin)}
+                      >
+                        🗑️
+                      </button>
+                    </span>
+                  )}
+                </div>
               ))}
+            </div>
+            <div className="skin-grid-actions">
+              <button
+                className="skin-grid-action-btn"
+                onClick={() => setEditorState({ mode: 'create' })}
+              >
+                ➕ 新建皮肤
+              </button>
+              <button
+                className="skin-grid-action-btn"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                📥 导入皮肤
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/json,.json"
+                style={{ display: 'none' }}
+                onChange={handleImportSkin}
+              />
             </div>
           </div>
 
@@ -289,6 +410,15 @@ export function SettingsPanel({ chatEngine, onClose, onSettingsChange }: Setting
           </div>
         </div>
       </div>
+
+      {editorState && (
+        <SkinEditor
+          mode={editorState.mode}
+          existingSkin={editorState.mode === 'edit' ? editorState.skin : undefined}
+          onClose={() => setEditorState(null)}
+          onSaved={handleSkinSaved}
+        />
+      )}
     </>
   )
 }

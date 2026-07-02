@@ -7,10 +7,9 @@ import {
   OffscreenLayer,
   FrameRateController,
   isStaticAction,
-  getThemeBySkin,
+  getThemeById,
   createRenderer,
   type IRenderer,
-  type SkinId,
   type RendererType,
   type PetMood,
   type PetAction,
@@ -76,13 +75,14 @@ export function usePetRenderer() {
     if (!canvas) return
 
     const saved = loadSettings()
-    const theme = getThemeBySkin((saved.skin || 'lumie') as SkinId)
+    const skinId = saved.skin || 'lumie'
+    const theme = getThemeById(skinId)
     const rendererType = (saved.rendererType || 'pixel') as RendererType
 
     // 每次 effect 执行都重新创建 offscreen + renderer，保证二者引用同一实例
     const offscreen = new OffscreenLayer(CANVAS_W, CANVAS_H)
     offscreenRef.current = offscreen
-    const renderer = createRenderer(rendererType, offscreen.petCtx, theme, saved.skin || 'lumie')
+    const renderer = createRenderer(rendererType, offscreen.petCtx, theme, skinId)
     rendererTypeRef.current = rendererType
 
     // 本轮 init 的版本号；若已被新一轮 effect 取代则丢弃回调结果

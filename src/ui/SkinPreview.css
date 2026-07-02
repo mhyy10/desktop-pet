@@ -1,0 +1,21 @@
+.skin-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated, #1e1e2e);
+  border-radius: 12px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  overflow: hidden;
+}
+
+.skin-preview canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.skin-preview-error {
+  color: var(--danger, #ff6b6b);
+  font-size: 12px;
+  padding: 12px;
+  text-align: center;
+}

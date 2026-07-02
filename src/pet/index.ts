@@ -10,8 +10,27 @@ export { SpringPhysics, SpringPhysics2D } from './Physics'
 export { ReminderScheduler } from './ReminderScheduler'
 export { AudioManager, audioManager } from './AudioManager'
 export type { SoundType } from './AudioManager'
-export { defaultTheme, SKINS, getThemeBySkin } from './theme'
+export { defaultTheme, defaultSkinId, SKINS, getThemeBySkin } from './theme'
 export type { SkinId, SkinDefinition } from './theme'
+export {
+  initSkinRegistry,
+  registerCustomSkin,
+  unregisterCustomSkin,
+  getAllSkins,
+  getSkinById,
+  getThemeById,
+  isBuiltInSkin,
+} from './skinRegistry'
+export type { RegisteredSkin, BuiltInSkin, CustomSkin } from './skinRegistry'
+export {
+  serializeSkinPack,
+  parseSkinPack,
+  isSkinPack,
+  isValidTheme,
+  skinPackToCustomSkin,
+  downloadSkinPack,
+} from './skinPack'
+export type { SkinPack } from './skinPack'
 export type { IRenderer, RendererType, TickResult } from './IRenderer'
 export { createRenderer } from './RendererFactory'
 export { OffscreenLayer } from './OffscreenLayer'

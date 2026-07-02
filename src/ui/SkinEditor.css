@@ -1,0 +1,195 @@
+.skin-editor {
+  width: 380px;
+  max-width: 92vw;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.skin-editor-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  overflow-y: auto;
+}
+
+.skin-editor-preview-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 4px;
+}
+
+.skin-editor-form-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.skin-editor-label {
+  width: 44px;
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--text-dim, rgba(255, 255, 255, 0.6));
+}
+
+.skin-editor-input {
+  flex: 1;
+  background: var(--bg-input, rgba(0, 0, 0, 0.3));
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+  border-radius: 8px;
+  padding: 7px 10px;
+  color: var(--text, #fff);
+  font-size: 13px;
+  outline: none;
+}
+
+.skin-editor-input:focus {
+  border-color: var(--primary, #6C5CE7);
+}
+
+.skin-editor-icon-input {
+  max-width: 80px;
+  text-align: center;
+}
+
+.skin-editor-section-title {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-dim, rgba(255, 255, 255, 0.5));
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.skin-editor-colors {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.skin-editor-color-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-input, rgba(0, 0, 0, 0.3));
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+
+.skin-editor-color-picker {
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  background: none;
+  padding: 0;
+}
+
+.skin-editor-color-picker::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.skin-editor-color-picker::-webkit-color-swatch {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+}
+
+.skin-editor-color-label {
+  font-size: 13px;
+  color: var(--text, #fff);
+  flex: 1;
+}
+
+.skin-editor-color-hex {
+  width: 70px;
+  background: transparent;
+  border: none;
+  color: var(--text-dim, rgba(255, 255, 255, 0.6));
+  font-size: 11px;
+  font-family: monospace;
+  outline: none;
+  text-align: right;
+}
+
+.skin-editor-advanced-toggle {
+  background: none;
+  border: none;
+  color: var(--text-dim, rgba(255, 255, 255, 0.5));
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 0;
+  text-align: left;
+}
+
+.skin-editor-advanced-toggle:hover {
+  color: var(--text, #fff);
+}
+
+.skin-editor-presets {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.skin-editor-preset {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: var(--bg-input, rgba(0, 0, 0, 0.3));
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+  border-radius: 8px;
+  padding: 6px 4px;
+  color: var(--text, #fff);
+  font-size: 11px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.skin-editor-preset:hover {
+  border-color: var(--primary, #6C5CE7);
+}
+
+.skin-editor-preset span:first-child {
+  font-size: 16px;
+}
+
+.skin-editor-error {
+  color: var(--danger, #ff6b6b);
+  font-size: 12px;
+  padding: 6px 0;
+}
+
+.skin-editor-footer {
+  display: flex;
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  justify-content: flex-end;
+}
+
+.skin-editor-btn {
+  padding: 7px 16px;
+  border-radius: 8px;
+  border: none;
+  font-size: 13px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.skin-editor-btn:hover {
+  opacity: 0.85;
+}
+
+.skin-editor-btn-ghost {
+  background: transparent;
+  color: var(--text-dim, rgba(255, 255, 255, 0.7));
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.15));
+}
+
+.skin-editor-btn-primary {
+  background: var(--primary, #6C5CE7);
+  color: #fff;
+}
