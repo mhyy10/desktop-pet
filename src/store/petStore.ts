@@ -14,6 +14,7 @@ interface PetStore {
   action: PetAction
   isDragging: boolean
   isChatOpen: boolean
+  isQuickPanelOpen: boolean
   isReady: boolean
   activePanel: PanelType
   reminderNotif: { icon: string; text: string } | null
@@ -29,6 +30,8 @@ interface PetStore {
   setAction: (action: PetAction) => void
   setDragging: (v: boolean) => void
   setChatOpen: (v: boolean) => void
+  setQuickPanelOpen: (open: boolean) => void
+  toggleQuickPanel: () => void
   setReady: (v: boolean) => void
   setActivePanel: (p: PanelType) => void
   setReminderNotif: (n: { icon: string; text: string } | null) => void
@@ -46,6 +49,7 @@ export const usePetStore = create<PetStore>((set) => ({
   action: 'idle_stand',
   isDragging: false,
   isChatOpen: false,
+  isQuickPanelOpen: false,
   isReady: false,
   activePanel: null,
   reminderNotif: null,
@@ -59,6 +63,8 @@ export const usePetStore = create<PetStore>((set) => ({
   setAction: (action) => set({ action }),
   setDragging: (isDragging) => set({ isDragging }),
   setChatOpen: (isChatOpen) => set({ isChatOpen }),
+  setQuickPanelOpen: (isQuickPanelOpen) => set({ isQuickPanelOpen }),
+  toggleQuickPanel: () => set((s) => ({ isQuickPanelOpen: !s.isQuickPanelOpen })),
   setReady: (isReady) => set({ isReady }),
   setActivePanel: (activePanel) => set({ activePanel }),
   setReminderNotif: (reminderNotif) => set({ reminderNotif }),
