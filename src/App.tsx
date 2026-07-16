@@ -31,6 +31,8 @@ export default function App() {
   const messages = usePetStore((s) => s.messages)
   const setActivePanel = usePetStore((s) => s.setActivePanel)
   const setChatOpen = usePetStore((s) => s.setChatOpen)
+  const isQuickPanelOpen = usePetStore((s) => s.isQuickPanelOpen)
+  const setQuickPanelOpen = usePetStore((s) => s.setQuickPanelOpen)
 
   // ---- 核心 hooks ----
   const {
@@ -74,6 +76,15 @@ export default function App() {
       {/* 心情指示器 */}
       <MoodIndicator mood={mood} />
 
+      {/* 快捷工具启动器 */}
+      <button
+        className="quick-panel-launcher"
+        onClick={() => setQuickPanelOpen(true)}
+        aria-label="打开快捷工具"
+      >
+        工具
+      </button>
+
       {/* 提醒通知 */}
       {reminderNotif && <ReminderNotification icon={reminderNotif.icon} text={reminderNotif.text} />}
 
@@ -86,8 +97,12 @@ export default function App() {
         />
       )}
 
-      {/* 侧边栏 */}
-      <QuickMenu onAction={handleQuickAction} />
+      {/* 快捷工具面板 */}
+      <QuickMenu
+        isOpen={isQuickPanelOpen}
+        onClose={() => setQuickPanelOpen(false)}
+        onAction={handleQuickAction}
+      />
 
       {/* 工具面板 */}
       {activePanel === 'note' && <NotePanel onClose={() => setActivePanel(null)} />}

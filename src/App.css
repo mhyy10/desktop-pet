@@ -30,6 +30,48 @@ html, body, #root {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+
+  /* 共享视觉令牌 */
+  --surface: rgba(29, 27, 52, 0.88);
+  --surface-border: rgba(255, 225, 166, 0.22);
+  --accent: #ffe1a6;
+  --accent-strong: #f6b86a;
+  --text: #f7f3ff;
+  --muted: rgba(247, 243, 255, 0.66);
+}
+
+/* ---- 快捷工具启动器 ---- */
+
+.quick-panel-launcher {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  padding: 4px 12px;
+  background: var(--surface);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--surface-border);
+  border-radius: 14px;
+  color: var(--accent);
+  font-size: 11px;
+  cursor: pointer;
+  z-index: 101;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.quick-panel-launcher:hover {
+  background: rgba(255, 225, 166, 0.15);
+  border-color: var(--accent);
+}
+
+.quick-panel-launcher:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quick-panel-launcher {
+    transition: none;
+  }
 }
 
 /* ---- Canvas ---- */

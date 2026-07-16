@@ -1,6 +1,9 @@
+import { useEffect } from 'react'
 import './QuickMenu.css'
 
 interface QuickMenuProps {
+  isOpen: boolean
+  onClose: () => void
   onAction: (action: string) => void
 }
 
@@ -13,25 +16,43 @@ const menuItems = [
   { id: 'settings', icon: '⚙️', label: '设置' },
 ]
 
-export function QuickMenu({ onAction }: QuickMenuProps) {
+export function QuickMenu({ isOpen, onClose, onAction }: QuickMenuProps) {
+  useEffect(() => {
+    if (!isOpen) return
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [isOpen, onClose])
+
+  if (!isOpen) return null
+
   return (
-    <>
-      {/* 右边缘隐形触发热区 */}
-      <div className="sidebar-trigger" />
-      {/* 侧边栏面板 */}
-      <nav className="pet-sidebar">
+    <nav className="quick-panel" aria-label="快捷工具">
+      <button
+        className="quick-panel-close"
+        onClick={onClose}
+        aria-label="关闭快捷工具"
+      >
+        ✕
+      </button>
+      <div className="quick-panel-grid">
         {menuItems.map((item) => (
           <button
             key={item.id}
-            className="sidebar-item"
-            onClick={() => onAction(item.id)}
+            className="quick-panel-item"
+            onClick={() => {
+              onAction(item.id)
+              onClose()
+            }}
             title={item.label}
           >
-            <span className="sidebar-icon">{item.icon}</span>
-            <span className="sidebar-label">{item.label}</span>
+            <span className="quick-panel-icon">{item.icon}</span>
+            <span className="quick-panel-label">{item.label}</span>
           </button>
         ))}
-      </nav>
-    </>
+      </div>
+    </nav>
   )
 }

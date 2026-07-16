@@ -1,127 +1,103 @@
 /* ============================================
-   桌面宠物 — 悬浮侧边栏
-   完全隐藏，hover 右边缘滑出
+   桌面宠物 — 受控快捷工具面板
+   右侧弹出 popover，Escape / 关闭按钮关闭
    ============================================ */
 
-/* ---- 右边缘触发热区 ---- */
-
-.sidebar-trigger {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 24px;
-  height: 100%;
-  z-index: 99;
-  cursor: pointer;
-}
-
-/* 微光暗示箭头 */
-.sidebar-trigger::after {
-  content: '';
+.quick-panel {
   position: absolute;
   top: 50%;
-  right: 6px;
+  right: 8px;
   transform: translateY(-50%);
-  width: 4px;
-  height: 24px;
-  border-radius: 2px;
-  background: rgba(108, 92, 231, 0.2);
-  transition: background 0.3s, height 0.3s;
+  width: 236px;
+  padding: 12px;
+  background: var(--surface, rgba(29, 27, 52, 0.88));
+  backdrop-filter: blur(16px);
+  border-radius: 18px;
+  border: 1px solid var(--surface-border, rgba(255, 225, 166, 0.22));
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  z-index: 200;
+  animation: quickPanelIn 0.2s ease-out;
 }
 
-.sidebar-trigger:hover::after {
-  background: rgba(108, 92, 231, 0.5);
-  height: 36px;
+@keyframes quickPanelIn {
+  from { opacity: 0; transform: translateY(-50%) translateX(12px); }
+  to { opacity: 1; transform: translateY(-50%) translateX(0); }
 }
 
-/* ---- 侧边栏面板 ---- */
-
-.pet-sidebar {
+.quick-panel-close {
   position: absolute;
-  top: 50%;
-  right: 0;
-  transform: translateY(-50%) translateX(100%);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 8px 6px;
-  background: rgba(30, 30, 46, 0.85);
-  backdrop-filter: blur(14px);
-  border-radius: 14px 0 0 14px;
-  border: 1px solid rgba(108, 92, 231, 0.15);
-  border-right: none;
-  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.2);
-  z-index: 100;
-  width: 120px;
-  overflow: hidden;
-  opacity: 0;
-  pointer-events: none;
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-              opacity 0.25s ease,
-              box-shadow 0.25s ease;
-}
-
-/* 热区 hover 时滑入 */
-.sidebar-trigger:hover + .pet-sidebar,
-.pet-sidebar:hover {
-  transform: translateY(-50%) translateX(0);
-  opacity: 1;
-  pointer-events: auto;
-  box-shadow: -6px 0 28px rgba(0, 0, 0, 0.3);
-  border-color: rgba(108, 92, 231, 0.3);
-}
-
-/* ---- 单个按钮 ---- */
-
-.sidebar-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 7px 6px;
-  background: none;
-  border: none;
-  border-radius: 10px;
-  cursor: pointer;
-  color: #DFE6E9;
-  white-space: nowrap;
-  transition: background 0.15s;
-}
-
-.sidebar-item:hover {
-  background: rgba(108, 92, 231, 0.25);
-}
-
-.sidebar-item:active {
-  background: rgba(108, 92, 231, 0.4);
-  transform: scale(0.95);
-}
-
-/* ---- 图标 ---- */
-
-.sidebar-icon {
-  flex-shrink: 0;
-  width: 24px;
-  height: 24px;
+  top: 8px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
-}
-
-/* ---- 文字标签 ---- */
-
-.sidebar-label {
+  background: none;
+  border: none;
+  border-radius: 8px;
+  color: var(--muted, rgba(247, 243, 255, 0.66));
+  cursor: pointer;
   font-size: 12px;
-  opacity: 0;
-  transform: translateX(-4px);
-  transition: opacity 0.2s ease 0.1s,
-              transform 0.2s ease 0.1s;
-  pointer-events: none;
+  transition: background 0.15s, color 0.15s;
 }
 
-.pet-sidebar:hover .sidebar-label {
-  opacity: 1;
-  transform: translateX(0);
-  pointer-events: auto;
+.quick-panel-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text, #f7f3ff);
+}
+
+.quick-panel-close:focus-visible,
+.quick-panel-item:focus-visible {
+  outline: 2px solid var(--accent, #ffe1a6);
+  outline-offset: 2px;
+}
+
+.quick-panel-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.quick-panel-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid transparent;
+  border-radius: 12px;
+  cursor: pointer;
+  color: var(--text, #f7f3ff);
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+
+.quick-panel-item:hover {
+  background: rgba(255, 225, 166, 0.12);
+  border-color: var(--surface-border, rgba(255, 225, 166, 0.22));
+}
+
+.quick-panel-item:active {
+  transform: scale(0.94);
+}
+
+.quick-panel-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.quick-panel-label {
+  font-size: 11px;
+  color: var(--muted, rgba(247, 243, 255, 0.66));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quick-panel,
+  .quick-panel-item,
+  .quick-panel-close {
+    animation: none;
+    transition: none;
+  }
 }

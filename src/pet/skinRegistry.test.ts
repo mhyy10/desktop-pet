@@ -53,15 +53,15 @@ describe('skinRegistry', () => {
       expect(lumie!.isBuiltIn).toBe(true)
     })
 
-    it('getThemeById 返回内置皮肤主题', () => {
-      const theme = getThemeById('lumie')
-      expect(theme.bodyColor).toBe('#A29BFE')
-    })
+   it('getThemeById 返回内置皮肤主题', () => {
+     const theme = getThemeById('lumie')
+      expect(theme.bodyColor).toBe('#F6B86A')
+   })
 
-    it('getThemeById 未知 id 回退到默认主题', () => {
-      const theme = getThemeById('not-exist')
-      expect(theme.bodyColor).toBe('#A29BFE')
-    })
+   it('getThemeById 未知 id 回退到默认主题', () => {
+     const theme = getThemeById('not-exist')
+      expect(theme.bodyColor).toBe('#F6B86A')
+   })
 
     it('isBuiltInSkin 内置返回 true', () => {
       expect(isBuiltInSkin('lumie')).toBe(true)
