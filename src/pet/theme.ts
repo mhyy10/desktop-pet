@@ -17,21 +17,21 @@ export interface SkinDefinition {
 
 export const SKINS: SkinDefinition[] = [
   {
-    id: 'lumie',
-    name: '小光',
-    icon: '✨',
-    description: '微光紫精灵，温暖好奇',
-    theme: {
-      primary: '#6C5CE7',
-      secondary: '#00B894',
-      warm: '#FDCB6E',
-      cool: '#74B9FF',
-      bodyColor: '#A29BFE',
-      glowColor: '#6C5CE7',
-      eyeColor: '#2D3436',
-      cheekColor: '#FD79A8',
-    },
-  },
+   id: 'lumie',
+   name: '小光',
+   icon: '✨',
+   description: '微光紫精灵，温暖好奇',
+   theme: {
+      primary: '#F6B86A',
+      secondary: '#F28B82',
+      warm: '#FFE1A6',
+      cool: '#8E9AE8',
+      bodyColor: '#F6B86A',
+      glowColor: '#FFE1A6',
+      eyeColor: '#312B4A',
+      cheekColor: '#F39A9C',
+   },
+ },
   {
     id: 'eggy',
     name: '煎蛋仔',

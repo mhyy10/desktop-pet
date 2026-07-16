@@ -11,7 +11,7 @@ import type { EyeStyle, MouthStyle } from './spriteUtils'
 export function defineAnimations(): Map<PetAction, SpriteAnimation> {
   const anims = new Map<PetAction, SpriteAnimation>()
 
-  // ---- idle_stand: 6帧, 站立微晃+眨眼 ----
+ // ---- idle_stand: 6帧, 站立微晃+眨眼 ----
   anims.set('idle_stand', {
     action: 'idle_stand',
     frameDuration: 200,

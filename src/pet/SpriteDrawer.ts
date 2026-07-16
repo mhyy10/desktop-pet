@@ -30,8 +30,10 @@ export class SpriteDrawer {
     const cy = 16 + params.bodyY
 
     this.drawGlow(data, cx, cy + 3)
-    this.drawEars(data, cx, cy)
+    this.drawHead(data, cx, cy)
     this.drawBody(data, cx, cy)
+    this.drawGlowFins(data, cx, cy)
+    this.drawCoreHighlight(data, cx, cy)
     this.drawFace(data, cx, cy - 5, params)
     this.drawGlowLine(data, cx, cy + 3)
     this.drawArm(data, cx + params.leftArm.x, cy + params.leftArm.y)
@@ -46,21 +48,30 @@ export class SpriteDrawer {
     fillEllipse(data, cx, cy, FRAME_W, 12, 12, r, g, b, 20)
   }
 
-  private drawEars(data: Uint8ClampedArray, cx: number, cy: number) {
+  /** 圆头构造：较大头部椭圆 + 高光 */
+  private drawHead(data: Uint8ClampedArray, cx: number, cy: number) {
     const [r, g, b] = this.bodyColor
     const [hr, hg, hb] = this.bodyHighlight
+    const [sr, sg, sb] = this.bodyShadow
+
+    fillEllipse(data, cx, cy - 2, FRAME_W, 11, 12, r, g, b, 255)
+    drawEllipseOutline(data, cx, cy - 2, FRAME_W, 11, 12, sr, sg, sb, 80)
+    fillEllipse(data, cx - 3, cy - 6, FRAME_W, 5, 5, hr, hg, hb, 110)
+  }
+
+  /** 两个小光鳍：头部两侧暖光 */
+  private drawGlowFins(data: Uint8ClampedArray, cx: number, cy: number) {
     const [gr, gg, gb] = this.glowColor
+    fillRect(data, cx - 12, cy - 3, FRAME_W, 2, 4, gr, gg, gb, 140)
+    fillRect(data, cx + 10, cy - 3, FRAME_W, 2, 4, gr, gg, gb, 140)
+    setPixel(data, cx - 13, cy - 2, FRAME_W, gr, gg, gb, 80)
+    setPixel(data, cx + 11, cy - 2, FRAME_W, gr, gg, gb, 80)
+  }
 
-    setPixel(data, cx - 8, cy - 13, FRAME_W, r, g, b, 255)
-    fillRect(data, cx - 9, cy - 12, FRAME_W, 3, 2, r, g, b, 255)
-    setPixel(data, cx - 8, cy - 14, FRAME_W, gr, gg, gb, 180)
-
-    setPixel(data, cx + 8, cy - 13, FRAME_W, r, g, b, 255)
-    fillRect(data, cx + 7, cy - 12, FRAME_W, 3, 2, r, g, b, 255)
-    setPixel(data, cx + 8, cy - 14, FRAME_W, gr, gg, gb, 180)
-
-    setPixel(data, cx - 8, cy - 12, FRAME_W, hr, hg, hb, 100)
-    setPixel(data, cx + 8, cy - 12, FRAME_W, hr, hg, hb, 100)
+  /** 内核高光：身体中心暖光点 */
+  private drawCoreHighlight(data: Uint8ClampedArray, cx: number, cy: number) {
+    const [gr, gg, gb] = this.glowColor
+    fillEllipse(data, cx, cy + 4, FRAME_W, 3, 4, gr, gg, gb, 90)
   }
 
   private drawBody(data: Uint8ClampedArray, cx: number, cy: number) {
@@ -68,10 +79,11 @@ export class SpriteDrawer {
     const [hr, hg, hb] = this.bodyHighlight
     const [sr, sg, sb] = this.bodyShadow
 
-    fillEllipse(data, cx, cy, FRAME_W, 12, 15, r, g, b, 255)
-    drawEllipseOutline(data, cx, cy, FRAME_W, 12, 15, sr, sg, sb, 80)
-    fillEllipse(data, cx - 4, cy - 6, FRAME_W, 5, 7, hr, hg, hb, 100)
-    fillEllipse(data, cx, cy + 8, FRAME_W, 8, 4, sr, sg, sb, 60)
+    // 较小的锥形身体椭圆
+    fillEllipse(data, cx, cy + 7, FRAME_W, 9, 8, r, g, b, 255)
+    drawEllipseOutline(data, cx, cy + 7, FRAME_W, 9, 8, sr, sg, sb, 80)
+    fillEllipse(data, cx - 3, cy + 4, FRAME_W, 4, 4, hr, hg, hb, 100)
+    fillEllipse(data, cx, cy + 11, FRAME_W, 6, 3, sr, sg, sb, 60)
   }
 
   private drawFace(data: Uint8ClampedArray, cx: number, cy: number, params: FrameParams) {
@@ -82,6 +94,11 @@ export class SpriteDrawer {
       fillRect(data, cx - 9, cy + 5, FRAME_W, 3, 2, cr, cg, cb, 120)
       fillRect(data, cx + 7, cy + 5, FRAME_W, 3, 2, cr, cg, cb, 120)
     }
+
+    // 始终绘制脸颊像素（暖光精灵特征）
+    const [cr, cg, cb] = this.cheekColor
+    fillRect(data, cx - 9, cy + 4, FRAME_W, 2, 2, cr, cg, cb, 80)
+    fillRect(data, cx + 7, cy + 4, FRAME_W, 2, 2, cr, cg, cb, 80)
   }
 
   private drawEyes(data: Uint8ClampedArray, cx: number, cy: number, style: EyeStyle) {
