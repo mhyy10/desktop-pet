@@ -23,6 +23,7 @@ dist-ssr
 *.sln
 *.sw?
 screenshot*.png
+.superpowers/
 
 # Rust/Tauri build artifacts
 src-tauri/target/
