@@ -30,3 +30,7 @@ src-tauri/target/
 desktop-pet-linux
 desktop-pet_*.deb
 *.rpm
+
+# Local pnpm store and workspace config
+.pnpm-store/
+pnpm-workspace.yaml
